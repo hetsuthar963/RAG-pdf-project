@@ -4,23 +4,31 @@
 
 
 'use client'
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Input } from "./ui/input";
 import { Button } from './ui/button';
 import MessageList from './MessageList';
 import { Send } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import axios from 'axios';
+import type { Message } from 'ai/react';
 
-type Message = { role: "user" | "assistant" | "system", content: string };
 type Props = { chatId: string };
+
+type DbMessage = {
+  id: number;
+  chatId: number;
+  content: string;
+  createdAt: string | Date | null;
+  role: 'user' | 'system';
+};
 
 const ChatComponent = ({ chatId }: Props) => {
   // Fetch all persisted messages from DB
   const { data, refetch, isFetching } = useQuery({
     queryKey: ["chat", chatId],
     queryFn: async () => {
-      const response = await axios.post<Message[]>('/api/getMessages', { chatId });
+      const response = await axios.post<DbMessage[]>('/api/getMessages', { chatId });
       return response.data;
     }
   });
@@ -30,8 +38,26 @@ const ChatComponent = ({ chatId }: Props) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const persistedMessages = useMemo<DbMessage[]>(() => {
+    return Array.isArray(data) ? data : [];
+  }, [data]);
+
   // Use fetched messages as source of truth
-  const messages = Array.isArray(data) ? data : [];
+  const uiMessages = useMemo<Message[]>(() => {
+    return persistedMessages.map((msg) => {
+      const createdAtValue = msg.createdAt ? new Date(msg.createdAt) : undefined;
+      const createdAt = createdAtValue && !Number.isNaN(createdAtValue.getTime()) ? createdAtValue : undefined;
+
+      return {
+        id: String(msg.id),
+        role: msg.role === 'user' ? 'user' : 'assistant',
+        content: msg.content,
+        ...(createdAt ? { createdAt } : {}),
+      };
+    });
+  }, [persistedMessages]);
+
+  const messageCount = persistedMessages.length;
 
   // Auto-scroll on new messages
   useEffect(() => {
@@ -42,13 +68,19 @@ const ChatComponent = ({ chatId }: Props) => {
         behavior: "smooth",
       });
     }
-  }, [messages]);
+  }, [messageCount]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!input.trim() || isLoading) return;
+    const trimmedInput = input.trim();
+    if (!trimmedInput || isLoading) return;
     setError(null);
     setIsLoading(true);
+
+    const outgoingHistory = [
+      ...persistedMessages.map(({ role, content }) => ({ role, content })),
+      { role: 'user', content: trimmedInput } as const,
+    ];
 
     // Send the message (along with chatId) to API
     try {
@@ -57,14 +89,15 @@ const ChatComponent = ({ chatId }: Props) => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
           chatId,
-          messages: [...messages, { role: "user", content: input }]
+          messages: outgoingHistory
         }),
       });
       setInput("");
       // Always refetch to reload all messages (user & assistant)
       await refetch();
-    } catch (err: any) {
-      setError(err.message || "Error");
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : "An unexpected error occurred";
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -77,7 +110,7 @@ const ChatComponent = ({ chatId }: Props) => {
         <h3 className='text-xl font-bold'>Chat</h3>
       </div>
       {/* Message list */}
-      <MessageList messages={messages} isLoading={isLoading || isFetching} />
+      <MessageList messages={uiMessages} isLoading={isLoading || isFetching} />
       <form onSubmit={handleSubmit} className='sticky bottom-0 inset-x-0 px-2 py-4 bg-white'>
         <div className="flex">
           <Input
