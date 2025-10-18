@@ -6,9 +6,7 @@ import MessageList from './MessageList'
 import { Send } from 'lucide-react'
 import { Message } from 'ai/react'
 
-type Props = {};
-
-const ChatComponentManual = (props: Props) => {
+const ChatComponentManual = () => {
     const [input, setInput] = useState('');
     const [messages, setMessages] = useState<Message[]>([]);
     const [isLoading, setIsLoading] = useState(false);
@@ -99,7 +97,7 @@ const ChatComponentManual = (props: Props) => {
             </div>
 
             {/* Message list */}
-            <MessageList messages={messages}/>
+            <MessageList messages={messages} isLoading={isLoading}/>
 
             <form onSubmit={handleSubmit} className='sticky bottom-0 inset-x-0 px-2 py-4 bg-white'>
                 <div className="flex">

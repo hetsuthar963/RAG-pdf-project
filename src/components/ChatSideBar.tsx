@@ -3,7 +3,7 @@ import { DrizzleChat } from "@/lib/db/schema"
 import Link from "next/link";
 import { Button } from "./ui/button"
 import React from 'react'
-import { MessageCircle, PlusCircleIcon } from "lucide-react";
+import { PlusCircleIcon } from "lucide-react";
 import { cn } from "@/lib/utils"
 
 type Props = {

@@ -3,7 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { useAuth } from '@clerk/nextjs';
 import Link from "next/link";
-import { LogInIcon, Inbox, Loader2, Loader } from 'lucide-react'
+import { LogInIcon, Inbox, Loader } from 'lucide-react'
 import React from 'react';
 import {useDropzone} from 'react-dropzone';
 import { uploadToS3 } from "@/lib/db/s3";
@@ -52,7 +52,7 @@ const UploadComponent = () => {
             toast.success("Chat Created!")
             router.push(`/chat/${chat_id}`)
           },
-          onError: (err) => {
+          onError: () => {
             toast.error("Error creating chat!")
           }
         })

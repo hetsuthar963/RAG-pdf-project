@@ -7,7 +7,6 @@ import ChatSideBar from '@/components/ChatSideBar';
 import { getSignedViewUrl } from "@/lib/db/s3";
 // import PDFViewerWrapper from '@/components/simple-pdf-viewer';
 import PDFViewer from '@/components/PDFViewer';
-import ChatComponentManual from '@/components/ChatComponentManual';
 import ChatComponent from '@/components/ChatComponent';
 
 type Props = {

@@ -1,13 +1,10 @@
 import { Pinecone, type PineconeRecord } from "@pinecone-database/pinecone";
-import type { Index as PineconeIndex } from "@pinecone-database/pinecone";
 import { downloadloadFromS3 } from "./s3-server";
 import { PDFLoader } from "@langchain/community/document_loaders/fs/pdf";
 import { Document, RecursiveCharacterTextSplitter } from "@pinecone-database/doc-splitter"
 import { getEmbeddings } from "./embeddings";
 import md5 from 'md5'
-import { metadata } from "@/app/layout";
 import { convertToAscii } from "../utils";
-import { Vector } from "@pinecone-database/pinecone/dist/pinecone-generated-ts-fetch/db_data/models/Vector";
 // import { Vector } from "@pinecone-database/pinecone/dist/pinecone-generated-ts-fetch/db_data";
 
 
@@ -87,7 +84,8 @@ async function embedDocument(doc: Document, fileKey: string) {
 
 
 export async function prepareDocument(page: PDFPage) {
-    let { pageContent, metadata } = page;
+    const { metadata } = page;
+    let pageContent = page.pageContent;
     pageContent = pageContent.replace(/\n/g, ' ');
 
     // Use smaller chunk size for better searchability (especially for names)
@@ -109,38 +107,7 @@ export async function prepareDocument(page: PDFPage) {
 }
 
 
-// Updated chunkedUpsert function
-async function chunkedUpsert(
-    index: ReturnType<typeof Pinecone.prototype.Index>,
-    vectors: PineconeRecord[],
-    namespace: string,
-    chunkSize = 100
-) {
-    const chunks = Array.from(
-        { length: Math.ceil(vectors.length / chunkSize) },
-        (_, i) => vectors.slice(i * chunkSize, (i + 1) * chunkSize)
-    );
 
-    const results = await Promise.allSettled(
-        chunks.map(async (chunk) => {
-            try {
-                await index.upsert(chunk);
-                return chunk.length;
-            } catch (error) {
-                console.error("Chunk upsert error:", error);
-                return 0;
-            }
-        })
-    );
-
-    const totalInserted = results.reduce((acc, result) => 
-        result.status === 'fulfilled' ? acc + result.value : acc, 0
-    );
-
-    if (totalInserted !== vectors.length) {
-        throw new Error(`Failed to insert all vectors (${totalInserted}/${vectors.length})`);
-    }
-}
 
 export const truncateStringByBytes = (str: string, bytes: number) => {
     const enc = new TextEncoder()

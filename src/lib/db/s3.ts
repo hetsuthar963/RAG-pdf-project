@@ -2,7 +2,7 @@ import AWS from 'aws-sdk'
 // import { log } from 'console';
 // import { access } from 'fs'
 // import { Key } from 'lucide-react';
-import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import 'dotenv/config'
 
@@ -97,11 +97,11 @@ export async function uploadToS3(file: File) {
         }
 
         const upload = s3.putObject(params).on('httpUploadProgress', evt => {
-            console.log('Uploading to S3... ⬆️', parseInt(((evt.loaded*100)/evt.total).toString())) + "%";
-            
+            console.log('Uploading to S3... ⬆️ ' + parseInt(((evt.loaded*100)/evt.total).toString()) + "%");
+
         }).promise()
 
-        await upload.then(data => {
+        await upload.then(() => {
             console.log('Successfully Uploaded to S3', file_key)
         })
 

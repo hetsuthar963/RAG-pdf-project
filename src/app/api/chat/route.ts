@@ -197,6 +197,12 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import { NextResponse } from "next/server";
 import { getContext } from "@/lib/context";
 
+type Message = {
+  role: string;
+  content?: string;
+  parts?: { text: string }[];
+};
+
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 
 export async function POST(req: Request) {
@@ -258,8 +264,8 @@ export async function POST(req: Request) {
 
     // Build user message block
     const userMessages = messages
-      .filter((m: any) => m.role === "user")
-      .map((m: any) => m.content || m.parts?.[0]?.text || "")
+      .filter((m: Message) => m.role === "user")
+      .map((m: Message) => m.content || m.parts?.[0]?.text || "")
       .join("\n");
 
     // Build the final prompt for Gemini
@@ -273,8 +279,8 @@ export async function POST(req: Request) {
       const result = await model.generateContent(prompt);
       text = result.response.text();
       console.log(`[Gemini] Gemini response received. Text length: ${text.length}`);
-    } catch (err: any) {
-      console.error(`[Gemini API ERROR]`, err?.message || err);
+    } catch (err: unknown) {
+      console.error(`[Gemini API ERROR]`, err instanceof Error ? err.message : err);
       throw err;
     }
 
@@ -295,13 +301,13 @@ export async function POST(req: Request) {
       headers: { "Content-Type": "application/json" }
     });
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     // Structured error logs
-    console.error('[API ERROR] Unexpected error:', error?.message || error, error?.stack);
+    console.error('[API ERROR] Unexpected error:', error instanceof Error ? error.message : error, error instanceof Error ? error.stack : error);
     return new Response(JSON.stringify({
       error: 'Internal Server Error',
-      message: error?.message,
-      stack: error?.stack
+      message: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined
     }), {
       status: 500,
       headers: { "Content-Type": "application/json" }

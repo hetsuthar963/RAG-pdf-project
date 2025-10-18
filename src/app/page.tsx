@@ -1,12 +1,5 @@
 
-import { Button } from "@/components/ui/button";
-import {
-  ClerkProvider,
-  SignInButton,
-  SignedIn,
-  SignedOut,
-  UserButton
-} from '@clerk/nextjs';
+import { UserButton } from '@clerk/nextjs';
 import ClientComponent from '@/components/ClientComponent'; 
 import UploadComponent from "@/components/UploadComponent";
 
