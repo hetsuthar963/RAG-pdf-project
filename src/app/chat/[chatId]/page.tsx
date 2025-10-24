@@ -9,16 +9,16 @@ import { getSignedViewUrl } from "@/lib/db/s3";
 import PDFViewer from '@/components/PDFViewer';
 import ChatComponent from '@/components/ChatComponent';
 
-type Props = {
-  params:{  chatId: string }
+type ChatPageProps = {
+  params: Promise<{ chatId: string }>;
 };
 
-const ChatPage = async ({ params }: Props) => {
+const ChatPage = async ({ params }: ChatPageProps) => {
+  const { chatId } = await params;
+
   const { userId } = await auth();
   if (!userId) redirect('/sign-in');
 
-  const chatId = params.chatId;
-  
   try {
     const userChats = await db.select().from(chats).where(eq(chats.userId, userId));
     const currentChat = userChats.find(chat => chat.id === parseInt(chatId));
