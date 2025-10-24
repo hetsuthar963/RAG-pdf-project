@@ -39,7 +39,7 @@ const ChatPage = async ({ params }: ChatPageProps) => {
           <div className="max-h-screen p-4 overflow-scroll flex-[5]">
             {signedPdfUrl ? (
               // <PDFViewerWrapper pdfUrl={signedPdfUrl} />
-              <PDFViewer pdf_url={currentChat?.pdfUrl || ''}/>
+              <PDFViewer pdf_url={signedPdfUrl}/>
             ) : (
               <div className="flex-center h-full text-gray-500">
                 No PDF document available
