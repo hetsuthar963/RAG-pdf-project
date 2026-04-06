@@ -1,192 +1,3 @@
-// import { openai } from '@ai-sdk/openai';
-// import { streamText } from 'ai';
-
-// export const runtime = 'edge';
-
-// export async function POST(req: Request) {
-//   try {
-//     const body = await req.json();
-//     console.log('Raw request body:', JSON.stringify(body, null, 2));
-    
-//     const { messages } = body as { messages: any[] };
-
-//     // Input validation
-//     if (!messages || !Array.isArray(messages)) {
-//       console.log('Invalid messages format:', messages);
-//       return Response.json({ error: 'Invalid messages format' }, { status: 400 });
-//     }
-
-//     // Check if API key is available
-//     if (!process.env.OPENAI_API_KEY) {
-//       console.log('No OpenAI API key found');
-//       return Response.json(
-//         { error: 'OpenAI API key not configured' },
-//         { status: 500 }
-//       );
-//     }
-
-//     console.log('Original messages:', JSON.stringify(messages, null, 2));
-
-//     // Transform messages to the correct format
-//     const transformedMessages = messages.map((msg: any) => {
-//       // Handle messages with 'parts' array (like from Google AI format)
-//       if (msg.parts && Array.isArray(msg.parts)) {
-//         const content = msg.parts
-//           .filter((part: any) => part.type === 'text')
-//           .map((part: any) => part.text)
-//           .join(' ');
-        
-//         console.log(`Transforming message with parts: ${JSON.stringify(msg)} -> content: "${content}"`);
-        
-//         return {
-//           role: msg.role,
-//           content: content || msg.content || ''
-//         };
-//       }
-      
-//       // Handle standard format
-//       console.log(`Standard message: ${JSON.stringify(msg)}`);
-//       return {
-//         role: msg.role,
-//         content: msg.content || ''
-//       };
-//     });
-
-//     console.log('Transformed messages for OpenAI:', JSON.stringify(transformedMessages, null, 2));
-
-//     // Validate transformed messages
-//     const validMessages = transformedMessages.filter(msg => msg.content && msg.content.trim() !== '');
-//     if (validMessages.length === 0) {
-//       console.log('No valid messages after transformation');
-//       return Response.json({ error: 'No valid messages found' }, { status: 400 });
-//     }
-
-//     console.log('Calling OpenAI with messages:', JSON.stringify(validMessages, null, 2));
-
-//     /** Use streamText from AI SDK v4 */
-//     const result = await streamText({
-//       model: openai('gpt-3.5-turbo'),
-//       messages: validMessages,
-//     });
-
-//     console.log('OpenAI response received, creating manual stream');
-
-//     // Create a custom ReadableStream that should work with fetch
-//     const stream = new ReadableStream({
-//       async start(controller) {
-//         try {
-//           const encoder = new TextEncoder();
-          
-//           for await (const chunk of result.textStream) {
-//             console.log('Streaming chunk:', chunk);
-//             controller.enqueue(encoder.encode(chunk));
-//           }
-          
-//           controller.close();
-//           console.log('Stream completed');
-//         } catch (error) {
-//           console.error('Stream error:', error);
-//           controller.error(error);
-//         }
-//       }
-//     });
-
-//     return new Response(stream, {
-//       headers: {
-//         'Content-Type': 'text/plain; charset=utf-8',
-//         'Cache-Control': 'no-cache',
-//         'Connection': 'keep-alive',
-//       },
-//     });
-    
-//   } catch (error: any) {
-//     console.error('OpenAI API Error:', error);
-    
-//     // Handle specific OpenAI API errors
-//     if (error?.status === 429 || error?.code === 'insufficient_quota') {
-//       return Response.json(
-//         { 
-//           error: 'API quota exceeded. Please check your OpenAI billing or try again later.',
-//           code: 'quota_exceeded'
-//         },
-//         { status: 429 }
-//       );
-//     }
-    
-//     if (error?.status === 401) {
-//       return Response.json(
-//         { 
-//           error: 'Invalid API key. Please check your OpenAI API key configuration.',
-//           code: 'invalid_api_key'
-//         },
-//         { status: 401 }
-//       );
-//     }
-    
-//     // Generic error handling
-//     return Response.json(
-//       { 
-//         error: 'Failed to process request. Please try again.',
-//         code: 'internal_error'
-//       },
-//       { status: 500 }
-//     );
-//   }
-// }
-
-// /* Optional guard so a direct GET shows 405 instead of 500 */
-// export function GET() {
-//   return Response.json(
-//     { ok: false, message: 'POST only' },
-//     { status: 405 },
-//   );
-// }
-
-
-// import OpenAI from 'openai';
-
-// // Use your OpenAI API key (should be set in your environment)
-// const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-
-// export async function POST(req: Request) {
-//   try {
-//     const body = await req.json();
-//     const { messages } = body;
-
-//     // Validate input
-//     if (!messages || !Array.isArray(messages)) {
-//       return new Response(JSON.stringify({ error: 'Invalid messages format' }), {
-//         status: 400,
-//         headers: { "Content-Type": "application/json" }
-//       });
-//     }
-
-//     // Call OpenAI
-//     const response = await openai.chat.completions.create({
-//       model: "gpt-3.5-turbo", // or "gpt-4o" if you have access
-//       messages, // [{ role: 'user', content: 'your prompt' }, ...]
-//       // stream: false, // default is non-streaming
-//     });
-
-//     // Return just the answer text
-//     const text = response.choices[0]?.message?.content || "";
-//     return new Response(JSON.stringify({ text }), {
-//       status: 200,
-//       headers: { "Content-Type": "application/json" }
-//     });
-//   } catch (error: any) {
-//     console.error('[OpenAI API Error]', error);
-//     return new Response(JSON.stringify({
-//       error: 'Internal Server Error',
-//       message: error.message,
-//       stack: error.stack,
-//     }), {
-//       status: 500,
-//       headers: { "Content-Type": "application/json" }
-//     });
-//   }
-// }
-
 
 
 
@@ -198,11 +9,11 @@ import { NextResponse } from "next/server";
 import { getContext } from "@/lib/context";
 import { AIMessage, HumanMessage, SystemMessage } from "@langchain/core/messages";
 
-type Message = {
-  role: string;
-  content?: string;
-  parts?: { text: string }[];
-};
+// type Message = {
+//   role: string;
+//   content?: string;
+//   parts?: { text: string }[];
+// };
 
 const model = new ChatOpenAI({
   modelName: "deepseek-chat",  // DeepSeek model
@@ -359,7 +170,7 @@ export async function POST(req: Request) {
     //   headers: { "Content-Type": "application/json" }
     // });
 
-  } catch (error: any) {
+  } catch (error) {
     // Structured error logs
     console.error('[API ERROR] Unexpected error:', error instanceof Error ? error.message : error, error instanceof Error ? error.stack : error);
     return new Response(JSON.stringify({

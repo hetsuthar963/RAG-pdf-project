@@ -6,8 +6,8 @@ import { RecursiveCharacterTextSplitter } from  "@langchain/textsplitters"
 import { getEmbeddings } from "./embeddings";
 import md5 from 'md5'
 import { convertToAscii } from "../utils";
-import { log } from "console";
-import { index } from "drizzle-orm/gel-core";
+// import { log } from "console";
+// import { index } from "drizzle-orm/gel-core";
 // import { Vector } from "@pinecone-database/pinecone/dist/pinecone-generated-ts-fetch/db_data";
 
 
@@ -25,12 +25,12 @@ export const getPineconeClient = () => {
     return pinecone;
 }
 
-type PDFPage = {
-    pageContent: string;
-    metadata: {
-        loc: {pageNumber:number}
-    }
-}
+// type PDFPage = {
+//     pageContent: string;
+//     metadata: {
+//         loc: {pageNumber:number}
+//     }
+// }
 
 
 
