@@ -2,7 +2,7 @@ import AWS from 'aws-sdk'
 import * as fs from 'fs';
 
 // const cert = fs.readFileSync('path/to/mitmproxy-ca-cert.pem');
-export async function downloadloadFromS3(file_key:string) {
+export async function downloadFromS3(file_key:string) {
     try {
         AWS.config.update({
             accessKeyId: process.env.NEXT_PUBLIC_S3_ACCESS_KEY_ID!,
