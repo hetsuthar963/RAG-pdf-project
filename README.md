@@ -62,7 +62,7 @@ An authenticated, end‑to‑end Retrieval Augmented Generation (RAG) experience
 | File storage         | AWS S3 (direct uploads + signed view URLs)               |
 | Vector store         | Pinecone                                                 |
 | Embeddings           | Cohere `embed-english-v3.0`                              |
-| LLM inference        | Google Gemini 2.0 Flash                                  |
+| LLM inference        | DeepSeek Chat                                  |
 | Database             | Neon serverless Postgres + Drizzle ORM                   |
 | PDF parsing/viewer   | LangChain loaders, @react-pdf-viewer                     |
 | Utilities            | Lucide icons, react-dropzone, react-hot-toast, md5, etc. |
