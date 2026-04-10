@@ -6,7 +6,7 @@ import { eq } from 'drizzle-orm';
 import ChatSideBar from '@/components/ChatSideBar';
 import { getSignedViewUrl } from "@/lib/db/s3";
 // import PDFViewerWrapper from '@/components/simple-pdf-viewer';
-import PDFViewer from '@/components/PDFViewer';
+// import PDFViewer from '@/components/PDFViewer';
 import ChatComponent from '@/components/ChatComponent';
 
 type ChatPageProps = {
