@@ -1,18 +1,18 @@
-import AWS from 'aws-sdk'
-// import { log } from 'console';
-// import { access } from 'fs'
-// import { Key } from 'lucide-react';
-import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
+"use server"
+
+import { S3Client, GetObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+// import { getRegion } from "@aws-sdk/region-provider";
 import 'dotenv/config'
 
 
-export const S3_BUCKET = process.env.NEXT_PUBLIC_S3_BUCKET_NAME!;
+const S3_BUCKET = process.env.NEXT_PUBLIC_S3_BUCKET_NAME!;
+
 const s3 = new S3Client({
-    region: "us-east-1",
+    region: process.env.S3_REGION || "us-east-1",
     credentials: {
-        accessKeyId: process.env.NEXT_PUBLIC_S3_ACCESS_KEY_ID!,
-        secretAccessKey: process.env.NEXT_PUBLIC_S3_SECRET_ACCESS_KEY!,
+        accessKeyId: process.env.S3_ACCESS_KEY_ID!,
+        secretAccessKey: process.env.S3_SECRET_ACCESS_KEY!,
     },
 });
 
@@ -74,49 +74,27 @@ export async function getSignedViewUrl(
 }
 
 
-export async function uploadToS3(file: File) {
-    try { 
-        AWS.config.update({
-            accessKeyId: process.env.NEXT_PUBLIC_S3_ACCESS_KEY_ID,
-            secretAccessKey: process.env.NEXT_PUBLIC_S3_SECRET_ACCESS_KEY,
-        });
-        const s3 = new AWS.S3({
-            params: {
-                Bucket: process.env.NEXT_PUBLIC_S3_BUCKET_NAME,
-            },
-            region: "us-east-1"
-        })
+export async function getPresignedUploadUrl(fileName: string, fileType: string) {
+    try {
+        const file_key = `uploads/${Date.now()}-${fileName.replace(/\s+/g, '-')}`;
 
-        const file_key = `uploads/${Date.now().toString()}-${file.name.replace(/\s+/g, '-')}`;
-
-        const params = {
-            Bucket: process.env.NEXT_PUBLIC_S3_BUCKET_NAME! ,
+        const command = new PutObjectCommand({
+            Bucket: S3_BUCKET,
             Key: file_key,
-            Body: file,
-            ContentType: file.type
-        }
+            ContentType: fileType,
+        });
 
-        const upload = s3.putObject(params).on('httpUploadProgress', evt => {
-            console.log('Uploading to S3... ⬆️ ' + parseInt(((evt.loaded*100)/evt.total).toString()) + "%");
+        // This creates a secure, temporary URL (expires in 60s)
+        const uploadUrl = await getSignedUrl(s3, command, { expiresIn: 60 });
 
-        }).promise()
-
-        await upload.then(() => {
-            console.log('Successfully Uploaded to S3', file_key)
-        })
-
-        return Promise.resolve({
-            file_key,
-            file_name: file.name,
-        })
-
+        return { uploadUrl, file_key };
     } catch (error) {
-        console.error('Error uploading to S3 : ', error);
-        return Promise.reject(error);
+        console.error("Error generating URL:", error);
+        throw new Error("Failed to generate upload URL");
     }
 }
 
-export function getS3Url(file_key: string) {
+export async function getS3Url(file_key: string) {
 
     
     if (!file_key) {
@@ -124,15 +102,15 @@ export function getS3Url(file_key: string) {
         return "";
     }
       
-      // Clean up the file key to remove any function toString representations
-      const cleanFileKey = file_key.replace(/function toString\(\) \{ \[native code\] \}/, "");
+    // Clean up the file key to remove any function toString representations
+    const cleanFileKey = file_key.replace(/function toString\(\) \{ \[native code\] \}/, "");
       
-      console.log("Building S3 URL with:", {
-        bucket: process.env.NEXT_PUBLIC_S3_BUCKET_NAME,
-        key: cleanFileKey
-      });
+    console.log("Building S3 URL with:", {
+      bucket: process.env.NEXT_PUBLIC_S3_BUCKET_NAME,
+      key: cleanFileKey
+    });
       
-      return `https://${process.env.NEXT_PUBLIC_S3_BUCKET_NAME}.s3.amazonaws.com/${cleanFileKey}`;
+    return `https://${S3_BUCKET}.s3.amazonaws.com/${cleanFileKey}`;
 }
 
 

@@ -6,7 +6,7 @@ import Link from "next/link";
 import { LogInIcon, Inbox, Loader } from 'lucide-react'
 import React from 'react';
 import {useDropzone} from 'react-dropzone';
-import { uploadToS3 } from "@/lib/db/s3";
+import { getPresignedUploadUrl } from "@/lib/db/s3";
 import { useMutation } from "@tanstack/react-query";
 import axios from "axios"
 import toast from "react-hot-toast";
@@ -31,6 +31,7 @@ const UploadComponent = () => {
     onDrop: async (acceptedFiles) => {
       // console.log(acceptedFiles); 
       const file = acceptedFiles[0] 
+      if (!file) return;
       if (file.size > 10 * 1024 * 1024) {
         // bigger then 10mb
         toast.error("File Too large!")
@@ -40,13 +41,26 @@ const UploadComponent = () => {
 
       try {
         setUploading(true)
-        const data = await uploadToS3(file)
-        if (!data?.file_key || !data.file_name) {
+        const { uploadUrl, file_key } = await getPresignedUploadUrl(file.name, file.type)
+
+        if (!file_key || !uploadUrl) {
           toast.error("Something went wrong!")
-          // alert("Something went wrong!")
           return;
         }
-        mutate(data, {
+
+        const uploadResponse = await fetch(uploadUrl, {
+          method: "PUT",
+          body: file,
+          headers: {
+            "Content-Type": file.type,
+          },
+        });
+
+        if (!uploadResponse.ok) {
+          throw new Error("Failed to upload file to S3");
+        }
+
+        mutate({file_key, file_name: file.name}, {
           onSuccess: ({chat_id}) => {
             // console.log(data);
             toast.success("Chat Created!")

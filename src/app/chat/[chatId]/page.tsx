@@ -36,7 +36,7 @@ const ChatPage = async ({ params }: ChatPageProps) => {
         </div>
         
        
-          <div className="max-h-screen p-4 overflow-scroll flex-[5]">
+          {/* <div className="max-h-screen p-4 overflow-scroll flex-[5]">
             {signedPdfUrl ? (
               // <PDFViewerWrapper pdfUrl={signedPdfUrl} />
               <PDFViewer pdf_url={signedPdfUrl}/>
@@ -45,7 +45,7 @@ const ChatPage = async ({ params }: ChatPageProps) => {
                 No PDF document available
               </div>
             )}
-        </div>
+        </div> */}
         <div className='flex-[3] border-1-4 border-1-slate-200'>
             <ChatComponent chatId={chatId}/>
           </div>
