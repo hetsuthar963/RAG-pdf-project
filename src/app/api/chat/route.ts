@@ -3,10 +3,11 @@
 
 import { db } from "@/lib/db";
 import { chats, message as _message } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { ChatOpenAI } from "@langchain/openai";
-import { NextResponse } from "next/server";
+import { NextResponse, NextRequest } from "next/server";
 import { getContext } from "@/lib/context";
+import { getAuth } from "@clerk/nextjs/server"
 import { AIMessage, HumanMessage, SystemMessage } from "@langchain/core/messages";
 
 // type Message = {
@@ -24,16 +25,40 @@ const model = new ChatOpenAI({
   temperature: 0.7,
 });
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
+  const { userId } = await getAuth(req);
+  
+  if (!userId) {
+    return NextResponse.json({error: "Unauthorized"}, {status: 401});
+  }
+
+  
+
   console.log(`[${new Date().toISOString()}] /api/chat POST hit`);
   try {
-    const body = await req.json();
-    const { messages, chatId } = body ?? {};
 
+    const body = await req.json();
+    console.log("[API] Received body:", JSON.stringify(body, null, 2));
+
+    // FLEXIBLE VALIDATION
+    const rawChatId = body.chatId;
+    if (!rawChatId || (typeof rawChatId !== "string" && typeof rawChatId !== "number")) {
+      return NextResponse.json({ error: "Missing chatId" }, { status: 400 });
+    }
+
+    const chatId = typeof rawChatId === "string" ? parseInt(rawChatId, 10) : rawChatId;
+    if (isNaN(chatId)) {
+      return NextResponse.json({ error: "Invalid chatId format" }, { status: 400 });
+    }
+
+    const { messages } = body;
+    if (!messages || !Array.isArray(messages) || messages.length === 0) {
+      return NextResponse.json({ error: "Invalid messages format" }, { status: 400 });
+    }
     console.log(`[API] Received body:`, JSON.stringify(body, null, 2));
 
     // Validation
-    if (!chatId || !messages || !Array.isArray(messages)) {
+    if (!rawChatId || (typeof rawChatId !== "string" && typeof rawChatId !== "number") || !messages || !Array.isArray(messages)) {
       console.log(`[API] Missing chatId or invalid messages format`, { chatId, messages });
       return NextResponse.json({ error: 'Missing chatId or invalid messages format' }, { status: 400 });
     }
@@ -49,11 +74,21 @@ export async function POST(req: Request) {
 
     // Fetch chat from DB
     console.log(`[DB] Looking up chatId:`, chatId);
-    const _chats = await db.select().from(chats).where(eq(chats.id, chatId));
+    const _chats = await db
+      .select()
+      .from(chats)
+      .where(
+        and(
+          eq(chats.id, chatId),
+          eq(chats.userId, userId)
+        )
+      );
+
     if (_chats.length !== 1) {
       console.log(`[DB] Chat not found or multiple results for id:`, chatId);
       return NextResponse.json({ error: 'Chat not found' }, { status: 404 });
     }
+
     const fileKey = _chats[0].fileKey;
     console.log(`[DB] Found fileKey:`, fileKey);
 
