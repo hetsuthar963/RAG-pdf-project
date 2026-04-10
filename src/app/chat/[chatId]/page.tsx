@@ -25,7 +25,7 @@ const ChatPage = async ({ params }: ChatPageProps) => {
     
     if (!currentChat) redirect('/');
 
-    const signedPdfUrl = currentChat.pdfUrl 
+    currentChat.pdfUrl 
       ? await getSignedViewUrl(currentChat.pdfUrl)
       : '';
 
