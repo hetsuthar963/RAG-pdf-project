@@ -4,9 +4,6 @@ import { db } from '@/lib/db';
 import { chats } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 import ChatSideBar from '@/components/ChatSideBar';
-import { getSignedViewUrl } from "@/lib/db/s3";
-// import PDFViewerWrapper from '@/components/simple-pdf-viewer';
-// import PDFViewer from '@/components/PDFViewer';
 import ChatComponent from '@/components/ChatComponent';
 
 type ChatPageProps = {
@@ -25,9 +22,9 @@ const ChatPage = async ({ params }: ChatPageProps) => {
     
     if (!currentChat) redirect('/');
 
-    currentChat.pdfUrl 
-      ? await getSignedViewUrl(currentChat.pdfUrl)
-      : '';
+    // const signedPdfUrl = currentChat.pdfUrl 
+    //   ? await getSignedViewUrl(currentChat.pdfUrl)
+    //   : '';
 
     return (
       <div className="flex h-screen overflow-hidden">
@@ -39,7 +36,7 @@ const ChatPage = async ({ params }: ChatPageProps) => {
           {/* <div className="max-h-screen p-4 overflow-scroll flex-[5]">
             {signedPdfUrl ? (
               // <PDFViewerWrapper pdfUrl={signedPdfUrl} />
-              <PDFViewer pdf_url={signedPdfUrl}/>
+              // <PDFViewer pdf_url={signedPdfUrl}/>
             ) : (
               <div className="flex-center h-full text-gray-500">
                 No PDF document available
