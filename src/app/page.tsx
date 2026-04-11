@@ -20,7 +20,7 @@ export default function Home() {
           <p className="max-w-xl mt-1 text-lg">
           Learn What Matters – Extract Repeated Questions Instantly!”
           </p>
-           <UploadComponent /> 
+           {/* <UploadComponent />  */}
         </div>
       </div>
     </div>

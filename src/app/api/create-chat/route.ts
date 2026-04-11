@@ -61,7 +61,7 @@ export async function POST(req: NextRequest) {
         // Explicitly type the insert object using InferInsertModel
         const newChat: InferInsertModel<typeof chats> = {
             pdfName: file_name,
-            pdfUrl: await getSignedUrl(s3Client, command, { expiresIn: 3600 }),
+            pdfUrl: getSignedUrl(s3Client, command, { expiresIn: 3600 }),
             userId: userId,
             fileKey: file_key,            
         };
@@ -79,7 +79,10 @@ export async function POST(req: NextRequest) {
     } catch (error) {
         console.error("Error in create-chat endpoint:", error);
         return NextResponse.json(
-            { error: "Internal server error" },
+            { 
+              error: "Internal server error", 
+              details: error instanceof Error ? error.message : String(error) 
+            },
             { status: 500 }
         );
     }
