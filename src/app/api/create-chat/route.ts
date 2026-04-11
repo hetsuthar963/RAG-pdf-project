@@ -61,7 +61,7 @@ export async function POST(req: NextRequest) {
         // Explicitly type the insert object using InferInsertModel
         const newChat: InferInsertModel<typeof chats> = {
             pdfName: file_name,
-            pdfUrl: getSignedUrl(s3Client, command, { expiresIn: 3600 }),
+            pdfUrl: await getSignedUrl(s3Client, command, { expiresIn: 3600 }),
             userId: userId,
             fileKey: file_key,            
         };

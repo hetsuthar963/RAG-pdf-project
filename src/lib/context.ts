@@ -107,7 +107,7 @@ export async function getContext(query: string, fileKey: string) {
     }
 
     // Filter matches by score threshold (adjust as needed)
-    const qualifyingDocs = matches.filter((match) => match.score && match.score > 0.1);
+    const qualifyingDocs = matches.filter((match) => match.score && match.score > 0.15);
     console.log("[DEBUG] Pinecone match scores:", matches.map(m => m.score));
     type Metadata = { text: string; pageNumber: number };
 
@@ -115,13 +115,24 @@ export async function getContext(query: string, fileKey: string) {
     const docs = qualifyingDocs
         .map(match => (match.metadata && (match.metadata as Metadata).text) || "")
         .filter(Boolean);
-
+    if (qualifyingDocs.length === 0) {
+        return { text: "", matches: [] };
+    }
     if (!docs.length) {
         console.warn(`[Context] No qualifying docs above threshold for query: "${query}"`);
     } else {
         console.log(`[Context] Returning ${docs.length} docs for context (truncated to 3000 chars)`);
     }
 
+    const contextString = docs.join("\n").substring(0, 3000);
+
     // Join and trim the total context
-    return docs.join('\n').substring(0, 3000);
-}
+    return {
+        text: contextString.length > 0 ? contextString : "",
+        matches: qualifyingDocs.map((match) => ({
+        score: match.score || 0,
+        text: (match.metadata as any).text
+  
+    }))
+    }
+};

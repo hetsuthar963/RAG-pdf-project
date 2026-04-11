@@ -7,214 +7,144 @@ import { eq, and } from "drizzle-orm";
 import { ChatOpenAI } from "@langchain/openai";
 import { NextResponse, NextRequest } from "next/server";
 import { getContext } from "@/lib/context";
-import { getAuth } from "@clerk/nextjs/server"
+import { getAuth } from "@clerk/nextjs/server";
 import { AIMessage, HumanMessage, SystemMessage } from "@langchain/core/messages";
 
-// type Message = {
-//   role: string;
-//   content?: string;
-//   parts?: { text: string }[];
-// };
+export const runtime = "nodejs";
 
 const model = new ChatOpenAI({
-  modelName: "deepseek-chat",  // DeepSeek model
+  modelName: "deepseek-chat",
   openAIApiKey: process.env.DEEPSEEK_API_KEY,
   configuration: {
     baseURL: "https://api.deepseek.com/v1",
   },
   temperature: 0.7,
+  streaming: true,
 });
 
 export async function POST(req: NextRequest) {
   const { userId } = await getAuth(req);
-  
   if (!userId) {
-    return NextResponse.json({error: "Unauthorized"}, {status: 401});
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  
-
-  console.log(`[${new Date().toISOString()}] /api/chat POST hit`);
   try {
-
     const body = await req.json();
-    console.log("[API] Received body:", JSON.stringify(body, null, 2));
-
-    // FLEXIBLE VALIDATION
-    const rawChatId = body.chatId;
-    if (!rawChatId || (typeof rawChatId !== "string" && typeof rawChatId !== "number")) {
-      return NextResponse.json({ error: "Missing chatId" }, { status: 400 });
-    }
-
+    const { chatId: rawChatId, messages } = body;
     const chatId = typeof rawChatId === "string" ? parseInt(rawChatId, 10) : rawChatId;
-    if (isNaN(chatId)) {
-      return NextResponse.json({ error: "Invalid chatId format" }, { status: 400 });
+
+    if (!chatId || isNaN(chatId)) {
+      return NextResponse.json({ error: "Invalid Chat ID" }, { status: 400 });
     }
 
-    const { messages } = body;
-    if (!messages || !Array.isArray(messages) || messages.length === 0) {
-      return NextResponse.json({ error: "Invalid messages format" }, { status: 400 });
-    }
-    console.log(`[API] Received body:`, JSON.stringify(body, null, 2));
-
-    // Validation
-    if (!rawChatId || (typeof rawChatId !== "string" && typeof rawChatId !== "number") || !messages || !Array.isArray(messages)) {
-      console.log(`[API] Missing chatId or invalid messages format`, { chatId, messages });
-      return NextResponse.json({ error: 'Missing chatId or invalid messages format' }, { status: 400 });
-    }
-
-    // Verify API key is configured
-    if (!process.env.DEEPSEEK_API_KEY) {
-      console.error(`[API] DEEPSEEK_API_KEY not configured`);
-      return NextResponse.json(
-        { error: 'AI service not configured. Please set DEEPSEEK_API_KEY.' },
-        { status: 500 }
-      );
-    }
-
-    // Fetch chat from DB
-    console.log(`[DB] Looking up chatId:`, chatId);
-    const _chats = await db
-      .select()
-      .from(chats)
-      .where(
-        and(
-          eq(chats.id, chatId),
-          eq(chats.userId, userId)
-        )
-      );
+    const _chats = await db.select().from(chats).where(and(eq(chats.id, chatId), eq(chats.userId, userId)));
 
     if (_chats.length !== 1) {
-      console.log(`[DB] Chat not found or multiple results for id:`, chatId);
-      return NextResponse.json({ error: 'Chat not found' }, { status: 404 });
+      return NextResponse.json({ error: "Chat not found" }, { status: 404 });
     }
-
     const fileKey = _chats[0].fileKey;
-    console.log(`[DB] Found fileKey:`, fileKey);
 
-    // Get context for last message
     const lastMessage = messages[messages.length - 1];
-    let context: string = "";
-    try {
-      console.log(`[Context] Getting context for lastMessage:`, lastMessage?.content);
-      context = await getContext(lastMessage.content, fileKey);
-      // Ensure context is string
-      context = typeof context === "string" ? context : (context ? String(context) : "");
-      console.log(`[Context] Context retrieved (${context.length} chars)`);
-    } catch (err) {
-      console.error(`[Context ERROR] Could not retrieve context:`, err);
-      context = "";
-    }
-
-    console.log('[DEBUG] context:', JSON.stringify(context));
-
-    // Build langchain message array
-    const langchainMessages = [];
-
-    // Build system prompt
-    const systemPrompt = `
-      AI assistant is a brand new, powerful, human-like artificial intelligence.
-      The traits of AI include expert knowledge, helpfulness, cleverness, and articulateness.
-      AI is a well-behaved and well-mannered individual.
-      AI is always friendly, kind, and inspiring, and he is eager to provide vivid and thoughtful responses to the user.
-      AI has the sum of all knowledge in their brain, and is able to accurately answer nearly any question about any topic in conversation.
-      AI assistant is a big fan of Pinecone and Vercel.
-      START CONTEXT BLOCK
-      ${context}
-      END OF CONTEXT BLOCK
-      AI assistant will take into account any CONTEXT BLOCK that is provided in a conversation.
-      If the context does not provide the answer to question, the AI assistant will say, "I'm sorry, but I don't know the answer to that question".
-      AI assistant will not apologize for previous responses, but instead will indicate new information was gained.
-      AI assistant will not invent anything that is not drawn directly from the context.
-    `.trim();
-
-    langchainMessages.push(new SystemMessage(systemPrompt));
-
-    // Convert history messages to langchain format
-    for (const m of messages) {
-      const content = m.content || m.parts?.[0]?.text || "";
-      if (!content.trim()) continue;
-
-      if (m.role === "user") {
-        langchainMessages.push(new HumanMessage(content));
-      } else if (m.role === "assistant" || m.role === "system") {
-        langchainMessages.push(new AIMessage(content));
-      }
-    }
-
-    console.log(`[LLM] Sending ${langchainMessages.length} messages to model`);
+    const startTime = Date.now();
     
-    // Call DeepSeek via langChain
-    const response = await model.invoke(langchainMessages);
-    const text = response.content as string;
+    // 1. Get Context Object
+    const contextResult = await getContext(lastMessage.content, fileKey);
+    const context = contextResult.text;
+    const executionTimeMs = Date.now() - startTime;
 
-    console.log(`[LLM] Response received (${text.length} chars)`);
-    console.log(`[LLM] Response preview: `, text.substring(0, 200));
+    // 2. Sanitize Headers
+    const headerSafe = (str: string) => {
+      return str.replace(/[^\x00-\x7F]/g, "").replace(/[\n\r\t]/g, " ").replace(/"/g, "'");
+    };
 
-    // Save messages to database
-    await db.insert(_message).values({
-      chatId,
-      content: lastMessage.content,
-      role: 'user'
+    const safeMatches = contextResult.matches.slice(0, 3).map((m: any) => ({
+      score: m.score,
+      text: headerSafe(m.text.substring(0, 150)) + "..."
+    }));
+
+    const ragData = {
+      namespace: fileKey,
+      contextLength: context.length,
+      contextSnippet: context.length > 0 ? headerSafe(context.substring(0, 150)) : "No context found",
+      matches: safeMatches,
+      executionTimeMs,
+    };
+
+    // 3. HARD SHORT-CIRCUIT: If context is empty, return immediately
+    if (!context || context.trim() === "") {
+      const fallbackText = "I'm sorry, but I don't have information about that in the provided document.";
+      const encoder = new TextEncoder();
+      const readable = new ReadableStream({
+        async start(controller) {
+          controller.enqueue(encoder.encode(fallbackText));
+          await db.insert(_message).values({ chatId, content: lastMessage.content, role: 'user' });
+          await db.insert(_message).values({ chatId, content: fallbackText, role: 'assistant' });
+          controller.close();
+        }
+      });
+      // ✅ RETURN 1
+      return new Response(readable, {
+        headers: { 'Content-Type': 'text/plain; charset=utf-8', 'X-Rag-Data': JSON.stringify(ragData) }
+      });
+    }
+
+    // 4. NORMAL LLM FLOW: If context exists, continue to model
+    const langchainMessages = [
+      new SystemMessage(`
+        You are a precision-oriented AI assistant. 
+        RULES:
+        1. ONLY answer using the provided context: ${context}
+        2. If asked for a calendar or list of dates, ALWAYS use a Markdown Table.
+        3. For holidays or special dates, wrap the date in bold and brackets like this: **[Date]**. 
+        4. If the information is not in the context, state that you don't know.
+        5. Format code using triple backticks.
+      `),
+      ...messages.slice(-6).map((m: any) =>
+        m.role === "user" ? new HumanMessage(m.content) : new AIMessage(m.content)
+      ),
+    ];
+
+    const stream = await model.stream(langchainMessages);
+    const encoder = new TextEncoder();
+
+    const readable = new ReadableStream({
+      async start(controller) {
+        let fullText = "";
+        try {
+          for await (const chunk of stream) {
+            const content = chunk.content as string;
+            if (content) {
+              fullText += content;
+              controller.enqueue(encoder.encode(content));
+            }
+          }
+
+          await db.insert(_message).values({ chatId, content: lastMessage.content, role: "user" });
+          await db.insert(_message).values({ chatId, content: fullText, role: "assistant" });
+        } catch (e) {
+          console.error("Streaming error:", e);
+          controller.error(e);
+        } finally {
+          controller.close();
+        }
+      },
     });
 
-    await db.insert(_message).values({
-      chatId,
-      content: text,
-      role: 'assistant'
+    // 🚨 THIS WAS LIKELY MISSING: The final return for the successful LLM stream
+    // ✅ RETURN 2
+    return new Response(readable, {
+      headers: {
+        "Content-Type": "text/plain; charset=utf-8",
+        "X-Rag-Data": JSON.stringify(ragData),
+      },
     });
-
-    return NextResponse.json({ text }, { status: 200 });
-
-    // // Build user message block
-    // const userMessages = messages
-    //   .filter((m: Message) => m.role === "user")
-    //   .map((m: Message) => m.content || m.parts?.[0]?.text || "")
-    //   .join("\n");
-
-    // // Build the final prompt for Gemini
-    // const prompt = `${systemPrompt}\n\n${userMessages}`;
-    // console.log(`[PROMPT] Sending prompt to Gemini: (first 500 chars)\n`, prompt.slice(0, 500));
-
-    // Send to Gemini
-    // const model = new OpenAI({ model: "deepseek-chat", temperature=0 });
-    // let text = "";
-    // try {
-    //   const result = await model.generateContent(prompt);
-    //   text = result.response.text();
-    //   console.log(`[Gemini] Gemini response received. Text length: ${text.length}`);
-    // } catch (err: unknown) {
-    //   console.error(`[Gemini API ERROR]`, err instanceof Error ? err.message : err);
-    //   throw err;
-    // }
-
-    // Save both messages in order
-    // await db.insert(_message).values({
-    //   chatId,
-    //   content: lastMessage.content,
-    //   role: 'user'
-    // });
-    // await db.insert(_message).values({
-    //   chatId,
-    //   content: text,
-    //   role: 'system'
-    // });
-
-    // return new Response(JSON.stringify({ text }), {
-    //   status: 200,
-    //   headers: { "Content-Type": "application/json" }
-    // });
 
   } catch (error) {
-    // Structured error logs
-    console.error('[API ERROR] Unexpected error:', error instanceof Error ? error.message : error, error instanceof Error ? error.stack : error);
-    return new Response(JSON.stringify({
-      error: 'Internal Server Error',
-      message: error instanceof Error ? error.message : 'Unknown error',
-      stack: error instanceof Error ? error.stack : undefined
-    }), {
-      status: 500,
-      headers: { "Content-Type": "application/json" }
-    });
+    console.error("[API ERROR]:", error);
+    // ✅ RETURN 3 (Error Fallback)
+    return NextResponse.json(
+      { error: "Internal Server Error", message: error instanceof Error ? error.message : "Unknown" },
+      { status: 500 }
+    );
   }
 }
