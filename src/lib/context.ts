@@ -96,14 +96,14 @@ export async function getContext(query: string, fileKey: string) {
     const queryEmbeddings = await getEmbeddings(query);
     if (!queryEmbeddings || !Array.isArray(queryEmbeddings)) {
         console.warn("[Embeddings] Failed to get embeddings for query:", query);
-        return "";
+        return { text: "", matches: [] };
     }
 
     // Get top matches from Pinecone
     const matches = await getMatchesFromEmbeddings(queryEmbeddings, fileKey);
     if (!matches.length) {
         console.warn(`[Pinecone] No matches found for fileKey: ${fileKey}`);
-        return "";
+        return { text: "", matches: [] };
     }
 
     // Filter matches by score threshold (adjust as needed)
@@ -126,13 +126,16 @@ export async function getContext(query: string, fileKey: string) {
 
     const contextString = docs.join("\n").substring(0, 3000);
 
-    // Join and trim the total context
+    interface MatchMetadata {
+        text?: string;
+        pageNumber?: number;
+    }
+
     return {
         text: contextString.length > 0 ? contextString : "",
         matches: qualifyingDocs.map((match) => ({
         score: match.score || 0,
-        text: (match.metadata as any).text
-  
+        text: (match.metadata as MatchMetadata).text || ""
     }))
     }
 };

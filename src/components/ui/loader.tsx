@@ -42,9 +42,7 @@ export function CircularLoader({
         sizeClasses[size],
         className
       )}
-    >
-      <span className="sr-only">Loading</span>
-    </div>
+    />
   )
 }
 
@@ -163,7 +161,7 @@ export function DotsLoader({
   return (
     <div
       className={cn(
-        "flex items-center space-x-1",
+        "flex items-center gap-1",
         containerSizes[size],
         className
       )}
@@ -172,7 +170,7 @@ export function DotsLoader({
         <div
           key={i}
           className={cn(
-            "bg-primary animate-[bounce-dots_1.4s_ease-in-out_infinite] rounded-full",
+            "bg-primary rounded-full animate-bounce-dots",
             dotSizes[size]
           )}
           style={{
@@ -180,7 +178,6 @@ export function DotsLoader({
           }}
         />
       ))}
-      <span className="sr-only">Loading</span>
     </div>
   )
 }
@@ -411,9 +408,9 @@ export function TextShimmerLoader({
   return (
     <div
       className={cn(
-        "bg-[linear-gradient(to_right,var(--muted-foreground)_40%,var(--foreground)_60%,var(--muted-foreground)_80%)]",
-        "bg-size-[200%_auto] bg-clip-text font-medium text-transparent",
-        "animate-[shimmer_4s_infinite_linear]",
+        "font-medium animate-shimmer",
+        "bg-clip-text text-transparent",
+        "bg-gradient-to-r from-muted-foreground via-foreground via-50% to-muted-foreground",
         textSizes[size],
         className
       )}
@@ -440,21 +437,15 @@ export function TextDotsLoader({
 
   return (
     <div
-      className={cn("inline-flex items-center", className)}
+      className={cn("inline-flex items-center gap-0.5", className)}
     >
       <span className={cn("text-primary font-medium", textSizes[size])}>
         {text}
       </span>
-      <span className="inline-flex">
-        <span className="text-primary animate-[loading-dots_1.4s_infinite_0.2s]">
-          .
-        </span>
-        <span className="text-primary animate-[loading-dots_1.4s_infinite_0.4s]">
-          .
-        </span>
-        <span className="text-primary animate-[loading-dots_1.4s_infinite_0.6s]">
-          .
-        </span>
+      <span className="inline-flex text-primary">
+        <span className="animate-loading-dots" style={{ animationDelay: "0.2s" }}>.</span>
+        <span className="animate-loading-dots" style={{ animationDelay: "0.4s" }}>.</span>
+        <span className="animate-loading-dots" style={{ animationDelay: "0.6s" }}>.</span>
       </span>
     </div>
   )

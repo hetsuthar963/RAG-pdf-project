@@ -19,9 +19,9 @@ function parseMarkdownIntoBlocks(markdown: string): string[] {
 }
 
 function extractLanguage(className?: string): string {
-  if (!className) return "plaintext"
+  if (!className) return "typescript"
   const match = className.match(/language-(\w+)/)
-  return match ? match[1] : "plaintext"
+  return match ? match[1] : "typescript"
 }
 
 const INITIAL_COMPONENTS: Partial<Components> = {

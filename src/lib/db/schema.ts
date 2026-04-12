@@ -6,7 +6,7 @@ export const chats = pgTable('chats', {
     id: serial('id').primaryKey(),
     pdfName: text('pdf_name').notNull(),
     pdfUrl: text('pdf_url').notNull(),
-    createdAt: timestamp('created_at').notNull().defaultNow(),
+    createdAt: timestamp('created_at', { mode: "string" }).notNull().defaultNow(), // ✅ String mode
     userId: varchar('user_id', {length:256}).notNull(),
     fileKey: text('file_key').notNull(),
 })
@@ -17,6 +17,6 @@ export const message = pgTable('messages', {
     id: serial('id').primaryKey(),
     chatId: integer('chat_id').references(()=>chats.id).notNull(),
     content: text('content').notNull(),
-    createdAt: timestamp('created_at').notNull().defaultNow(),
+    createdAt: timestamp('created_at', { mode: "string" }).notNull().defaultNow(), // ✅ String mode
     role: userSystemEnum('role').notNull()
 })

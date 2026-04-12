@@ -1,294 +1,31 @@
-
-
-// "use client";
-
-// import { useState, useRef } from "react";
-// import { Send, Paperclip, Bot, User, Loader2, Copy, Check, FileText } from "lucide-react";
-// import { useRouter } from "next/navigation";
-// import toast from "react-hot-toast";
-// import axios from "axios";
-// import { TextShimmer } from "@/components/ui/text-shimmer";
-// import { getPresignedUploadUrl } from "@/lib/db/s3";
-// import { 
-//   ChatContainerRoot, 
-//   ChatContainerContent 
-// } from "@/components/ui/chat-container"; 
-// import { RagProcessTracker } from "./ui/ragProcessTracker";
-// // import { Message } from "@/components/ui/message";
-// import { 
-//   PromptInput, 
-//   PromptInputTextarea 
-// } from "@/components/ui/prompt-input";
-// import { ScrollButton } from "@/components/ui/scroll-button";
-
-// export type RagMetadata = {
-//   namespace: string;
-//   contextLength: number;
-//   contextSnippet: string;
-//   executionTimeMs: number;
-// };
-
-// export type AppMessage = {
-//   id: string;
-//   role: "user" | "assistant" | "system";
-//   content: string;
-//   ragData?: RagMetadata; // <-- Added to store the actual metadata
-// };
-
-// export default function ChatComponent({ 
-//   chatId, 
-//   initialMessages = []
-// }: {
-//   chatId: string | number; 
-//   initialMessages?: AppMessage[]; 
-// }) {
-//   const router = useRouter();
-//   const fileInputRef = useRef<HTMLInputElement>(null);
-  
-//   const [input, setInput] = useState("");
-//   const [isLoading, setIsLoading] = useState(false);
-//   const [isUploadingDoc, setIsUploadingDoc] = useState(false); // Tracks new document upload state
-  
-//   const [messages, setMessages] = useState<AppMessage[]>(
-//     initialMessages.length > 0 
-//       ? initialMessages 
-//       : [{ id: "system-1", role: "assistant", content: "System initialized. Document loaded." }]
-//   );
-
-//   // --- NEW: Document Upload Logic (Ports your UploadComponent logic) ---
-//   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-//     const file = e.target.files?.[0];
-//     if (!file) return;
-
-//     if (file.size > 10 * 1024 * 1024) {
-//       toast.error("File Too large! Please upload under 10MB.");
-//       if (fileInputRef.current) fileInputRef.current.value = "";
-//       return;
-//     }
-
-//     try {
-//       setIsUploadingDoc(true);
-//       toast.loading("Grilling your paper...", { id: "upload-toast" });
-
-//       // 1. Get AWS Presigned URL
-//       const { uploadUrl, file_key } = await getPresignedUploadUrl(file.name, file.type);
-//       if (!file_key || !uploadUrl) {
-//         throw new Error("Failed to get presigned URL");
-//       }
-
-//       // 2. Upload directly to S3
-//       const uploadResponse = await fetch(uploadUrl, {
-//         method: "PUT",
-//         body: file,
-//         headers: { "Content-Type": file.type },
-//       });
-
-//       if (!uploadResponse.ok) {
-//         throw new Error("Failed to upload file to S3");
-//       }
-
-//       // 3. Trigger Pinecone vectorization and DB chat creation
-//       const response = await axios.post('/api/create-chat', { 
-//         file_key, 
-//         file_name: file.name 
-//       });
-
-//       // 4. Redirect to the newly created chat
-//       toast.success("New Chat Created!", { id: "upload-toast" });
-//       router.push(`/chat/${response.data.chat_id}`);
-
-//     } catch (error) {
-//       console.error("Upload pipeline error:", error);
-//       toast.error("Error creating chat!", { id: "upload-toast" });
-//     } finally {
-//       setIsUploadingDoc(false);
-//       if (fileInputRef.current) fileInputRef.current.value = ""; // Reset input
-//     }
-//   };
-
-//   // --- Standard Chat Submission Logic ---
-//   const handleSubmit = async () => {
-//     if (!input.trim() || isLoading) return;
-    
-//     // 1. Create user message
-//     const userMessage: AppMessage = { 
-//       id: Date.now().toString(), 
-//       role: "user", 
-//       content: input 
-//     };
-        
-//     // 2. Update UI immediately to show the user's message and loading state
-//     setMessages((prev) => [...prev, userMessage]);
-//     setInput("");
-//     setIsLoading(true);
-
-//     try {
-//       // // 3. Make the actual network request
-//       // const response = await fetch("/api/chat", {
-//       //   method: "POST",
-//       //   headers: { "Content-Type": "application/json" },
-//       //   body: JSON.stringify({ chatId, messages: [...messages, userMessage] })
-//       // });
-      
-//       // if (!response.ok) throw new Error(`API error: ${response.status}`);
-      
-//       // // 4. Parse the response ONLY AFTER the fetch is complete
-      
-      
-//       const response = await fetch("/api/chat", {
-//         method: "POST",
-//         headers: { "Content-Type": "application/json" },
-//         body: JSON.stringify({ chatId, messages: [...messages, userMessage] })
-//       });
-
-//       // 1. Get Metadata from Headers
-//       const ragData = JSON.parse(response.headers.get('X-Rag-Data') || '{}');
-      
-//       // 2. Setup Assistant Message Placeholder
-//       const assistantId = (Date.now() + 1).toString();
-//       setMessages((prev) => [...prev, { id: assistantId, role: "assistant", content: "", ragData }]);
-
-//       // 3. READ STREAM
-//       const reader = response.body?.getReader();
-//       const decoder = new TextDecoder();
-
-//       while (true) {
-//         const { done, value } = await reader!.read();
-//         if (done) break;
-//         const chunk = decoder.decode(value, { stream: true });
-        
-//         setMessages((prev) => prev.map(m => 
-//           m.id === assistantId ? { ...m, content: m.content + chunk } : m
-//         ));
-//       }
-
-//       // 5. Update UI with the AI's response and the RAG metadata
-//       // setMessages((prev) => [...prev, { 
-//       //   id: Date.now().toString(), 
-//       //   role: "assistant", 
-//       //   content: data.text,
-//       //   ragData: data.ragData // Capture the metadata here
-//       // }]);
-//     } catch (error) {
-//       console.error("Transmission error:", error);
-//     } finally {
-//       // 6. Stop loading state regardless of success or failure
-//       setIsLoading(false);
-//     }
-//   };
-
-//   return (
-//     <div className="flex flex-col h-full w-full relative bg-slate-50">
-//       <ChatContainerRoot className="flex-1 overflow-y-auto p-4 md:p-8">
-//         <ChatContainerContent className="max-w-4xl mx-auto flex flex-col gap-6">
-//           {messages.map((msg, idx) => (
-//             <div key={msg.id} className={`flex flex-col gap-2 w-full ${msg.role === "user" ? "items-end" : "items-start"}`}>
-//               {/* Vertical Stack: Tracker above Bubble */}
-//               {msg.role === "assistant" && msg.ragData && idx > 0 && (
-//                 <div className="w-full pl-12 pr-4">
-//                   <RagProcessTracker ragData={msg.ragData} />
-//                 </div>
-//               )}
-              
-//               <div className={`flex gap-4 w-full ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
-//                 {msg.role === "assistant" && (
-//                   <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center border border-blue-200 shrink-0 mt-1 shadow-sm"><Bot size={18} className="text-blue-600" /></div>
-//                 )}
-//                 <div className={`px-5 py-3.5 max-w-[85%] text-sm md:text-base shadow-sm ${msg.role === "user" ? "bg-slate-800 text-white rounded-2xl rounded-tr-sm" : "bg-white text-slate-800 border border-slate-200 rounded-2xl rounded-tl-sm"}`}>
-//                   {msg.content === "" && isLoading ? (
-//                     <TextShimmer className="text-sm font-medium">
-//                       Synthesizing answer...
-//                     </TextShimmer>
-//                     ) : (
-//                     msg.content
-//                   )}
-//                 </div>
-//                 {msg.role === "user" && (
-//                   <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center border border-slate-300 shrink-0 mt-1 shadow-sm"><User size={18} className="text-slate-600" /></div>
-//                 )}
-//               </div>
-//             </div>
-//           ))}
-//         </ChatContainerContent>
-//         <ScrollButton />
-//       </ChatContainerRoot>
-
-//       <div className="w-full p-4 bg-slate-50 border-t border-slate-200">
-//         <div className="max-w-4xl mx-auto flex items-end gap-2 bg-white p-2 rounded-2xl border border-slate-300 shadow-sm focus-within:border-slate-400 focus-within:ring-4 focus-within:ring-slate-100 transition-all">
-          
-//           {/* NEW: Hidden File Input configured for PDFs */}
-//           <input 
-//             type="file" 
-//             accept=".pdf"
-//             ref={fileInputRef}
-//             className="hidden"
-//             onChange={handleFileUpload}
-//           />
-
-//           {/* NEW: Upload Trigger Button */}
-//           <button 
-//             type="button"
-//             onClick={() => fileInputRef.current?.click()}
-//             className="p-3 text-slate-400 hover:text-slate-800 transition-colors shrink-0 disabled:opacity-50"
-//             disabled={isLoading || isUploadingDoc}
-//             title="Upload new PDF"
-//           >
-//             {isUploadingDoc ? (
-//               <Loader2 size={20} className="animate-spin text-blue-600" />
-//             ) : (
-//               <Paperclip size={20} />
-//             )}
-//           </button>
-
-//           <div className="flex-1 relative">
-//             <PromptInput 
-//               value={input}
-//               onValueChange={setInput}
-//               onSubmit={handleSubmit}
-//               disabled={isLoading || isUploadingDoc}
-//             >
-//               <PromptInputTextarea 
-//                 placeholder={isUploadingDoc ? "Creating new chat..." : "Ask about this document..."} 
-//                 className="w-full min-h-[44px] max-h-[200px] py-3 pr-12 bg-transparent resize-none outline-none focus:outline-none focus:ring-0 border-none text-slate-900 placeholder:text-slate-400 shadow-none disabled:opacity-50" 
-//               />
-//             </PromptInput>
-
-//             <button
-//               onClick={handleSubmit}
-//               disabled={!input.trim() || isLoading || isUploadingDoc}
-//               className="absolute right-1 bottom-1 p-2 bg-slate-800 text-white rounded-xl hover:bg-slate-700 disabled:bg-slate-100 disabled:text-slate-400 transition-all"
-//             >
-//               <Send size={18} />
-//             </button>
-//           </div>
-//         </div>
-//       </div>
-//     </div>
-//   );
-// }
-
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Send, Paperclip, Bot, User, Copy, Check, Square } from "lucide-react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import axios from "axios";
+import { cn } from "@/lib/utils";
+import Link from "next/link";
 
-// --- Prompt-Kit UI Imports (Only the ones we know you have) ---
-import { TextShimmer } from "@/components/ui/text-shimmer";
+import { DrizzleChat } from "@/lib/db/schema";
+
+import {
+  ArrowUp, Copy, Square, Plus, PlusIcon,
+  Check, Home, LogOut, FileText
+} from "lucide-react";
+
 import { Markdown } from "@/components/ui/markdown";
 import { Loader } from "@/components/ui/loader";
-import { 
-  ChatContainerRoot, 
-  ChatContainerContent 
-} from "@/components/ui/chat-container"; 
-import { PromptInput, PromptInputTextarea } from "@/components/ui/prompt-input";
-import { ScrollButton } from "@/components/ui/scroll-button";
+import { Button } from "@/components/ui/button";
 
-// --- Local Imports ---
-import { RagProcessTracker } from "@/components/ui/ragProcessTracker";
-import { getPresignedUploadUrl } from "@/lib/db/s3";
+import {
+  Sidebar, SidebarContent, SidebarGroup, SidebarGroupLabel, SidebarHeader,
+  SidebarInset, SidebarMenu, SidebarMenuButton, SidebarProvider, SidebarTrigger,
+} from "@/components/ui/sidebar";
+
+import { PromptInput, PromptInputTextarea, PromptInputActions, PromptInputAction } from "@/components/ui/prompt-input";
+
+import { RagProcessTracker } from "./ui/ragProcessTracker";
 
 export type RagMetadata = {
   namespace: string;
@@ -305,25 +42,80 @@ export type AppMessage = {
   ragData?: RagMetadata;
 };
 
-export default function ChatComponent({ 
-  chatId, 
-  initialMessages = []
-}: {
-  chatId: string | number; 
-  initialMessages?: AppMessage[]; 
-}) {
+function ChatSidebar({ chats, currentChatId }: { chats: DrizzleChat[]; currentChatId: number }) {
+  return (
+    <Sidebar>
+      <SidebarHeader className="flex flex-row items-center justify-between gap-2 px-2 py-4">
+        <div className="flex flex-row items-center gap-2 px-2">
+          <div className="bg-primary/10 size-8 rounded-md" />
+          <div className="text-sm font-medium text-foreground">DocuChat</div>
+        </div>
+      </SidebarHeader>
+
+      <SidebarContent className="pt-2">
+        <div className="px-4">
+          <Link href="/" className="block">
+            <Button variant="outline" className="mb-3 flex w-full items-center gap-2">
+              <PlusIcon size={16} />
+              <span>New Chat</span>
+            </Button>
+          </Link>
+        </div>
+
+        <SidebarGroup>
+          <SidebarGroupLabel>Documents</SidebarGroupLabel>
+          <SidebarMenu>
+            {chats.length === 0 ? (
+              <div className="px-4 py-4 text-sm text-muted-foreground">No documents</div>
+            ) : (
+              chats.map((chat) => (
+                <SidebarMenuButton key={chat.id} isActive={chat.id === currentChatId} asChild>
+                  <Link href={`/chat/${chat.id}`}>
+                    <span>{chat.pdfName}</span>
+                  </Link>
+                </SidebarMenuButton>
+              ))
+            )}
+          </SidebarMenu>
+        </SidebarGroup>
+      </SidebarContent>
+
+      <div className="mt-auto border-t p-4">
+        <div className="flex flex-col gap-2">
+          <Link href="/" className="block">
+            <Button variant="ghost" className="w-full justify-start gap-2">
+              <Home size={16} />
+              <span>Home</span>
+            </Button>
+          </Link>
+          <Link href="/sign-out" className="block">
+            <Button variant="ghost" className="w-full justify-start gap-2">
+              <LogOut size={16} />
+              <span>Sign Out</span>
+            </Button>
+          </Link>
+        </div>
+      </div>
+    </Sidebar>
+  );
+}
+
+function ChatContent({ chatId, initialMessages = [] }: { chatId: number; initialMessages?: AppMessage[] }) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const [input, setInput] = useState("");
+  const [prompt, setPrompt] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isUploadingDoc, setIsUploadingDoc] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
-  
-  const [messages, setMessages] = useState<AppMessage[]>(
-    initialMessages.length > 0 ? initialMessages : []
-  );
+  const [streamingMessageId, setStreamingMessageId] = useState<string | null>(null);
+  const [messages, setMessages] = useState<AppMessage[]>(initialMessages);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
 
   useEffect(() => {
     return () => abortControllerRef.current?.abort();
@@ -332,7 +124,7 @@ export default function ChatComponent({
   const copyToClipboard = (text: string, id: string) => {
     navigator.clipboard.writeText(text);
     setCopiedId(id);
-    toast.success("Copied to clipboard");
+    toast.success("Copied!");
     setTimeout(() => setCopiedId(null), 2000);
   };
 
@@ -341,6 +133,7 @@ export default function ChatComponent({
       abortControllerRef.current.abort();
       abortControllerRef.current = null;
       setIsLoading(false);
+      setStreamingMessageId(null);
       toast("Generation stopped", { icon: "🛑" });
     }
   };
@@ -351,16 +144,35 @@ export default function ChatComponent({
 
     try {
       setIsUploadingDoc(true);
-      const { uploadUrl, file_key } = await getPresignedUploadUrl(file.name, file.type);
-      
-      const uploadResponse = await fetch(uploadUrl, { method: "PUT", body: file, headers: { "Content-Type": file.type }});
-      if (!uploadResponse.ok) throw new Error("S3 Upload Failed");
+
+      const urlResponse = await fetch('/api/upload-url', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ file_name: file.name, file_type: file.type })
+      });
+
+      if (!urlResponse.ok) {
+        const errorData = await urlResponse.json();
+        throw new Error(errorData.error || `Failed to get presigned URL: ${urlResponse.status}`);
+      }
+
+      const { uploadUrl, file_key } = await urlResponse.json();
+
+      const uploadRes = await fetch(uploadUrl, {
+        method: "PUT",
+        body: file,
+        headers: { "Content-Type": file.type }
+      });
+
+      if (!uploadRes.ok) {
+        throw new Error(`S3 upload failed: ${uploadRes.status}`);
+      }
 
       const response = await axios.post('/api/create-chat', { file_key, file_name: file.name });
       router.push(`/chat/${response.data.chat_id}`);
       toast.success("Document analyzed!");
     } catch (error) {
-      toast.error("Upload failed");
+      toast.error(error instanceof Error ? error.message : "Upload failed");
     } finally {
       setIsUploadingDoc(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -368,159 +180,228 @@ export default function ChatComponent({
   };
 
   const handleSubmit = async () => {
-    if (!input.trim() || isLoading) return;
-    
+    if (!prompt.trim() || isLoading) return;
+
     abortControllerRef.current = new AbortController();
-    const userMessage: AppMessage = { id: Date.now().toString(), role: "user", content: input };
-    
+    const userMessage: AppMessage = { id: Date.now().toString(), role: "user", content: prompt };
+    const tempAssistantId = (Date.now() + 1).toString();
+
     setMessages((prev) => [...prev, userMessage]);
-    setInput("");
+    setPrompt("");
     setIsLoading(true);
+    setStreamingMessageId(tempAssistantId);
 
     try {
       const response = await fetch("/api/chat", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ chatId, messages: [...messages, userMessage] }),
-        signal: abortControllerRef.current.signal, 
+        signal: abortControllerRef.current.signal,
       });
 
-      // 🚨 CRITICAL FIX: If the backend crashes, throw an error to prevent the app from reading bad JSON as a stream
-      if (!response.ok) {
-        throw new Error(`Server returned ${response.status}`);
-      }
+      if (!response.ok) throw new Error(`Server returned ${response.status}`);
 
       const ragData = JSON.parse(response.headers.get('X-Rag-Data') || '{}');
-      const assistantId = (Date.now() + 1).toString();
-      
-      setMessages((prev) => [...prev, { id: assistantId, role: "assistant", content: "", ragData }]);
+
+      setMessages((prev) => [...prev, { id: tempAssistantId, role: "assistant", content: "", ragData }]);
 
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();
 
       if (reader) {
+        let fullText = "";
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
           const chunk = decoder.decode(value, { stream: true });
-          
-          setMessages((prev) => prev.map(m => 
-            m.id === assistantId ? { ...m, content: m.content + chunk } : m
+          fullText += chunk;
+
+          setMessages((prev) => prev.map(m =>
+            m.id === tempAssistantId ? { ...m, content: fullText } : m
           ));
         }
       }
-    } catch (error: any) {
-      if (error.name === 'AbortError') return;
-      toast.error(error.message || "Error generating response");
-      // Remove the empty assistant message if it failed to stream
+    } catch (error: unknown) {
+      if (error instanceof Error && error.name === 'AbortError') return;
+      toast.error(error instanceof Error ? error.message : "Error generating response");
       setMessages(prev => prev.filter(m => m.content !== "" || m.role === "user"));
     } finally {
       setIsLoading(false);
+      setStreamingMessageId(null);
       abortControllerRef.current = null;
     }
   };
 
   return (
-    <div className="flex flex-col h-[100dvh] w-full bg-slate-50 overflow-hidden">
-      
-      <ChatContainerRoot className="flex-1 overflow-y-auto">
-        <ChatContainerContent className="max-w-4xl mx-auto flex flex-col gap-8 p-4 md:p-8 pb-12">
-          
-          {messages.map((msg, idx) => {
-            const isAssistant = msg.role === "assistant";
+    <main className="flex h-screen flex-col overflow-hidden">
+      {/* Header */}
+      <header className="bg-background z-10 flex h-14 w-full shrink-0 items-center gap-2 border-b px-4">
+        <SidebarTrigger className="-ml-1" />
+        <div className="flex items-center gap-2">
+          <FileText size={18} className="text-primary" />
+          <span className="text-sm font-medium text-foreground">Document Chat</span>
+        </div>
+      </header>
 
-            return (
-              <div key={msg.id} className={`flex flex-col gap-3 w-full ${isAssistant ? "items-start" : "items-end"}`}>
-                
-                {/* RAG Tracker */}
-                {isAssistant && msg.ragData && idx > 0 && (
-                  <div className="w-full pl-12 mb-2">
-                    <RagProcessTracker ragData={msg.ragData} />
-                  </div>
-                )}
+      {/* Messages Area */}
+      <div className="relative flex-1 overflow-y-auto">
+        <div className="mx-auto flex max-w-3xl flex-col gap-4 px-4 py-6 sm:px-6 sm:py-8">
+          {messages.length === 0 ? (
+            <div className="flex h-full flex-col items-center justify-center text-center">
+              <div className="bg-primary/10 mb-4 rounded-2xl p-4">
+                <FileText size={32} className="text-primary" />
+              </div>
+              <h2 className="mb-2 text-lg font-semibold text-foreground">Start a conversation</h2>
+              <p className="max-w-sm text-sm text-muted-foreground">
+                Ask questions about your uploaded document and get instant AI-powered answers.
+              </p>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-4">
+              {messages.map((message, index) => {
+                const isAssistant = message.role === "assistant";
+                const isLastAssistantMessage = isAssistant && index === messages.length - 1;
+                const isStreaming = isLastAssistantMessage && streamingMessageId === message.id;
 
-                {/* Standard Tailwind Flex Bubbles (Replaced prompt-kit Message to prevent crashes) */}
-                <div className={`flex gap-4 w-full group ${isAssistant ? "justify-start" : "justify-end"}`}>
-                  
-                  {isAssistant && (
-                    <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center border border-slate-200 shrink-0 mt-1 shadow-sm">
-                      <Bot size={18} className="text-blue-600" />
-                    </div>
-                  )}
+                return (
+                  <div
+                    key={message.id}
+                    className={cn(
+                      "mx-auto flex w-full max-w-3xl flex-col gap-2",
+                      isAssistant ? "items-start" : "items-end"
+                    )}
+                  >
+                    {isAssistant && message.ragData && index > 0 && (
+                      <RagProcessTracker ragData={message.ragData} />
+                    )}
 
-                  <div className="relative max-w-[85%] sm:max-w-[75%] flex flex-col gap-2">
                     {isAssistant ? (
-                      <div className="bg-white text-slate-800 border border-slate-200 rounded-2xl rounded-tl-sm p-4 shadow-sm overflow-x-auto">
-                        
-                        {/* Loading State */}
-                        {msg.content === "" && isLoading ? (
-                          <div className="flex items-center gap-3">
-                            <Loader className="size-4 text-blue-600 animate-spin" /> 
-                            <TextShimmer className="text-sm font-medium [--shimmer-color:theme(colors.blue.600)]">
-                              Reasoning...
-                            </TextShimmer>
+                      <div className="flex w-full flex-col gap-1">
+                        <div className="flex flex-1 items-start gap-3">
+                          <div className="bg-primary/10 flex size-8 shrink-0 items-center justify-center rounded-lg">
+                            <FileText size={14} className="text-primary" />
                           </div>
-                        ) : (
-                          <div className="prose prose-sm md:prose-base max-w-none">
-                            <Markdown>{msg.content}</Markdown>
+                          <div className={cn(
+                            "flex-1 rounded-lg bg-transparent p-0",
+                            isStreaming ? "flex items-center gap-2" : ""
+                          )}>
+                            {isStreaming ? (
+                              <Loader variant="loading-dots" size="sm" text="Generating" />
+                            ) : (
+                              <div className="text-sm leading-relaxed prose prose-sm dark:prose-invert">
+                                <Markdown>{message.content}</Markdown>
+                              </div>
+                            )}
                           </div>
+                        </div>
+                        {message.content && !isStreaming && (
+                          <button
+                            onClick={() => copyToClipboard(message.content, message.id)}
+                            className="-ml-2 self-start p-1.5 text-muted-foreground hover:text-foreground"
+                            title="Copy"
+                          >
+                            {copiedId === message.id ? <Check size={14} className="text-green-500" /> : <Copy size={14} />}
+                          </button>
                         )}
                       </div>
                     ) : (
-                      <div className="bg-slate-800 text-white rounded-2xl rounded-tr-sm shadow-sm py-3 px-5 text-sm md:text-base">
-                        {msg.content}
+                      <div className="flex flex-col items-end gap-1">
+                        <div className="bg-primary text-primary-foreground max-w-[85%] rounded-3xl px-5 py-2.5 text-sm sm:max-w-[75%]">
+                          {message.content}
+                        </div>
                       </div>
                     )}
-
-                    {/* Copy Button */}
-                    {isAssistant && msg.content !== "" && (
-                      <button onClick={() => copyToClipboard(msg.content, msg.id)} className="opacity-0 group-hover:opacity-100 transition-opacity self-start p-1.5 text-slate-400 hover:text-slate-600 bg-white border border-slate-200 rounded-md shadow-sm">
-                        {copiedId === msg.id ? <Check size={14} className="text-green-500" /> : <Copy size={14} />}
-                      </button>
-                    )}
                   </div>
-
-                  {!isAssistant && (
-                    <div className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center border border-slate-700 shrink-0 mt-1 shadow-sm">
-                      <User size={18} className="text-white" />
-                    </div>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-
-        </ChatContainerContent>
-        <ScrollButton />
-      </ChatContainerRoot>
-
-      {/* Input Dock */}
-      <div className="w-full p-4 bg-white border-t border-slate-200 shrink-0">
-        <div className="max-w-4xl mx-auto flex items-end gap-2 bg-slate-50 p-2 rounded-2xl border border-slate-200 focus-within:bg-white focus-within:border-slate-300 focus-within:ring-4 focus-within:ring-slate-100 transition-all">
-          
-          <input type="file" accept=".pdf" ref={fileInputRef} className="hidden" onChange={handleFileUpload} />
-
-          <button type="button" onClick={() => fileInputRef.current?.click()} className="p-3 text-slate-400 hover:text-slate-800 transition-colors shrink-0" disabled={isLoading || isUploadingDoc}>
-            {isUploadingDoc ? <Loader className="size-5 animate-spin text-blue-600" /> : <Paperclip size={20} />}
-          </button>
-
-          <div className="flex-1 relative">
-            <PromptInput value={input} onValueChange={setInput} onSubmit={handleSubmit} disabled={isLoading || isUploadingDoc}>
-              <PromptInputTextarea placeholder={isUploadingDoc ? "Processing PDF..." : "Ask a question..."} className="w-full min-h-[44px] max-h-[200px] py-3 pr-12 bg-transparent resize-none border-none outline-none focus:ring-0 text-slate-900" />
-            </PromptInput>
-
-            {isLoading ? (
-               <button onClick={stopGeneration} className="absolute right-1 bottom-1 p-2 bg-red-100 text-red-600 rounded-xl hover:bg-red-200 transition-colors" title="Stop generating">
-                 <Square fill="currentColor" size={16} />
-               </button>
-            ) : (
-              <button onClick={handleSubmit} disabled={!input.trim() || isUploadingDoc} className="absolute right-1 bottom-1 p-2 bg-slate-800 text-white rounded-xl hover:bg-slate-700 disabled:bg-slate-100 disabled:text-slate-400">
-                <Send size={18} />
-              </button>
-            )}
-          </div>
+                );
+              })}
+              <div ref={messagesEndRef} />
+            </div>
+          )}
         </div>
       </div>
-    </div>
+
+      {/* Input Area */}
+      <div className="bg-background z-10 shrink-0 px-3 pb-3 md:px-5 md:pb-5">
+        <div className="mx-auto max-w-3xl">
+          <input
+            type="file"
+            accept=".pdf"
+            ref={fileInputRef}
+            className="hidden"
+            onChange={handleFileUpload}
+          />
+          
+          <PromptInput
+            isLoading={isLoading}
+            value={prompt}
+            onValueChange={setPrompt}
+            onSubmit={isLoading ? stopGeneration : handleSubmit}
+            className="border-input bg-popover relative z-10 w-full rounded-3xl border p-0 shadow-xs"
+          >
+            <div className="flex flex-col">
+              <PromptInputTextarea
+                placeholder="Ask a question..."
+                className="min-h-[44px] pt-3 pl-4 text-base leading-[1.3]"
+              />
+
+              <PromptInputActions className="mt-2 flex w-full items-center justify-between gap-2 px-3 pb-3">
+                <div className="flex items-center gap-2">
+                  <PromptInputAction tooltip="Upload PDF">
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="size-9 rounded-full"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={isUploadingDoc}
+                    >
+                      {isUploadingDoc ? (
+                        <Loader className="size-4 animate-spin" />
+                      ) : (
+                        <Plus size={18} />
+                      )}
+                    </Button>
+                  </PromptInputAction>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="icon"
+                    disabled={!prompt.trim() && !isLoading}
+                    className="size-9 rounded-full"
+                  >
+                    {isLoading ? (
+                      <Square size={16} fill="currentColor" />
+                    ) : (
+                      <ArrowUp size={18} />
+                    )}
+                  </Button>
+                </div>
+              </PromptInputActions>
+            </div>
+          </PromptInput>
+        </div>
+      </div>
+    </main>
+  );
+}
+
+export default function ChatComponent({
+  chatId,
+  initialMessages = [],
+  userChats = []
+}: {
+  chatId: string | number;
+  initialMessages?: AppMessage[];
+  userChats?: DrizzleChat[];
+}) {
+  const numericChatId = typeof chatId === "string" ? parseInt(chatId, 10) : chatId;
+
+  return (
+    <SidebarProvider>
+      <ChatSidebar chats={userChats} currentChatId={numericChatId} />
+      <SidebarInset>
+        <ChatContent chatId={numericChatId} initialMessages={initialMessages} />
+      </SidebarInset>
+    </SidebarProvider>
   );
 }

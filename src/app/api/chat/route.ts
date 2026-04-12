@@ -1,6 +1,3 @@
-
-
-
 import { db } from "@/lib/db";
 import { chats, message as _message } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
@@ -11,6 +8,8 @@ import { getAuth } from "@clerk/nextjs/server";
 import { AIMessage, HumanMessage, SystemMessage } from "@langchain/core/messages";
 
 export const runtime = "nodejs";
+
+console.log("[CHAT-API] ========== CHAT API MODULE INITIALIZED ==========");
 
 const model = new ChatOpenAI({
   modelName: "deepseek-chat",
@@ -23,41 +22,62 @@ const model = new ChatOpenAI({
 });
 
 export async function POST(req: NextRequest) {
+  console.log("[CHAT-API] ========== NEW CHAT REQUEST ==========");
+
   const { userId } = await getAuth(req);
+  console.log("[CHAT-API] User authenticated:", !!userId);
+
   if (!userId) {
+    console.log("[CHAT-API] Unauthorized");
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   try {
+    console.log("[CHAT-API] Parsing request body...");
     const body = await req.json();
     const { chatId: rawChatId, messages } = body;
+    console.log("[CHAT-API] chatId:", rawChatId);
+    console.log("[CHAT-API] messages count:", messages?.length || 0);
+
     const chatId = typeof rawChatId === "string" ? parseInt(rawChatId, 10) : rawChatId;
 
     if (!chatId || isNaN(chatId)) {
+      console.log("[CHAT-API] Invalid chatId:", rawChatId);
       return NextResponse.json({ error: "Invalid Chat ID" }, { status: 400 });
     }
 
+    console.log("[CHAT-API] Looking up chat in database...");
     const _chats = await db.select().from(chats).where(and(eq(chats.id, chatId), eq(chats.userId, userId)));
 
     if (_chats.length !== 1) {
+      console.log("[CHAT-API] Chat not found for user:", userId, "chatId:", chatId);
       return NextResponse.json({ error: "Chat not found" }, { status: 404 });
     }
+
     const fileKey = _chats[0].fileKey;
+    console.log("[CHAT-API] Found chat with fileKey:", fileKey);
 
     const lastMessage = messages[messages.length - 1];
+    console.log("[CHAT-API] Last message:", lastMessage?.content?.substring(0, 50) || "empty");
+
     const startTime = Date.now();
-    
-    // 1. Get Context Object
+
+    console.log("[CHAT-API] Getting context from Pinecone...");
     const contextResult = await getContext(lastMessage.content, fileKey);
     const context = contextResult.text;
     const executionTimeMs = Date.now() - startTime;
+    console.log("[CHAT-API] Context length:", context.length, "execution time:", executionTimeMs, "ms");
 
-    // 2. Sanitize Headers
     const headerSafe = (str: string) => {
       return str.replace(/[^\x00-\x7F]/g, "").replace(/[\n\r\t]/g, " ").replace(/"/g, "'");
     };
 
-    const safeMatches = contextResult.matches.slice(0, 3).map((m: any) => ({
+    interface Match {
+      score: number;
+      text: string;
+    }
+
+    const safeMatches: Match[] = contextResult.matches.slice(0, 3).map((m: Match) => ({
       score: m.score,
       text: headerSafe(m.text.substring(0, 150)) + "..."
     }));
@@ -70,8 +90,8 @@ export async function POST(req: NextRequest) {
       executionTimeMs,
     };
 
-    // 3. HARD SHORT-CIRCUIT: If context is empty, return immediately
     if (!context || context.trim() === "") {
+      console.log("[CHAT-API] No context found - returning fallback response");
       const fallbackText = "I'm sorry, but I don't have information about that in the provided document.";
       const encoder = new TextEncoder();
       const readable = new ReadableStream({
@@ -82,13 +102,12 @@ export async function POST(req: NextRequest) {
           controller.close();
         }
       });
-      // ✅ RETURN 1
       return new Response(readable, {
         headers: { 'Content-Type': 'text/plain; charset=utf-8', 'X-Rag-Data': JSON.stringify(ragData) }
       });
     }
 
-    // 4. NORMAL LLM FLOW: If context exists, continue to model
+    console.log("[CHAT-API] Generating LLM response...");
     const langchainMessages = [
       new SystemMessage(`
         You are a precision-oriented AI assistant. 
@@ -99,7 +118,7 @@ export async function POST(req: NextRequest) {
         4. If the information is not in the context, state that you don't know.
         5. Format code using triple backticks.
       `),
-      ...messages.slice(-6).map((m: any) =>
+      ...messages.slice(-6).map((m: { role: string; content: string }) =>
         m.role === "user" ? new HumanMessage(m.content) : new AIMessage(m.content)
       ),
     ];
@@ -111,6 +130,7 @@ export async function POST(req: NextRequest) {
       async start(controller) {
         let fullText = "";
         try {
+          console.log("[CHAT-API] Streaming response...");
           for await (const chunk of stream) {
             const content = chunk.content as string;
             if (content) {
@@ -118,11 +138,12 @@ export async function POST(req: NextRequest) {
               controller.enqueue(encoder.encode(content));
             }
           }
-
+          console.log("[CHAT-API] Stream complete, saving to DB...");
           await db.insert(_message).values({ chatId, content: lastMessage.content, role: "user" });
           await db.insert(_message).values({ chatId, content: fullText, role: "assistant" });
+          console.log("[CHAT-API] Messages saved to DB");
         } catch (e) {
-          console.error("Streaming error:", e);
+          console.error("[CHAT-API] Streaming error:", e);
           controller.error(e);
         } finally {
           controller.close();
@@ -130,8 +151,7 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // 🚨 THIS WAS LIKELY MISSING: The final return for the successful LLM stream
-    // ✅ RETURN 2
+    console.log("[CHAT-API] ========== SUCCESS ==========");
     return new Response(readable, {
       headers: {
         "Content-Type": "text/plain; charset=utf-8",
@@ -140,8 +160,8 @@ export async function POST(req: NextRequest) {
     });
 
   } catch (error) {
-    console.error("[API ERROR]:", error);
-    // ✅ RETURN 3 (Error Fallback)
+    console.error("[CHAT-API] ERROR:", error);
+    console.error("[CHAT-API] Stack:", error instanceof Error ? error.stack : "No stack trace");
     return NextResponse.json(
       { error: "Internal Server Error", message: error instanceof Error ? error.message : "Unknown" },
       { status: 500 }

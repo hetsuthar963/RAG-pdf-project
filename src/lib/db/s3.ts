@@ -1,122 +1,89 @@
-"use server"
-
-import { S3Client, GetObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-// import { getRegion } from "@aws-sdk/region-provider";
-import 'dotenv/config'
 
+console.log("[S3] ========== S3 MODULE INITIALIZED ==========");
 
-const S3_BUCKET = process.env.NEXT_PUBLIC_S3_BUCKET_NAME!;
+const BUCKET_NAME = process.env.NEXT_PUBLIC_S3_BUCKET_NAME || "mydeproject01";
+const REGION = process.env.S3_REGION || "us-east-1";
 
-const s3 = new S3Client({
-    region: process.env.S3_REGION || "us-east-1",
+console.log("[S3] Configuration:");
+console.log("[S3] - BUCKET_NAME:", BUCKET_NAME);
+console.log("[S3] - REGION:", REGION);
+console.log("[S3] - S3_ACCESS_KEY_ID set:", !!process.env.S3_ACCESS_KEY_ID);
+console.log("[S3] - S3_SECRET_ACCESS_KEY set:", !!process.env.S3_SECRET_ACCESS_KEY);
+
+function createS3Client(): S3Client {
+  const accessKeyId = process.env.S3_ACCESS_KEY_ID;
+  const secretAccessKey = process.env.S3_SECRET_ACCESS_KEY;
+
+  if (!accessKeyId || !secretAccessKey) {
+    console.error("[S3] CRITICAL: AWS credentials not configured!");
+    console.error("[S3] - accessKeyId:", accessKeyId ? "SET" : "MISSING");
+    console.error("[S3] - secretAccessKey:", secretAccessKey ? "SET" : "MISSING");
+    throw new Error("AWS credentials not configured. Please set S3_ACCESS_KEY_ID and S3_SECRET_ACCESS_KEY environment variables.");
+  }
+
+  console.log("[S3] Creating S3 client with credentials:", accessKeyId.substring(0, 4) + "***");
+
+  return new S3Client({
+    region: REGION,
     credentials: {
-        accessKeyId: process.env.S3_ACCESS_KEY_ID!,
-        secretAccessKey: process.env.S3_SECRET_ACCESS_KEY!,
+      accessKeyId: accessKeyId,
+      secretAccessKey: secretAccessKey,
     },
-});
-
-
-// export async function getS3SignedUrl(file_key: string) {
-//     if (!file_key) {
-//         console.error("Empty fileKey provided to getS3SignedUrl");
-//         return "";
-//     }
-
-//     // Clean up the file key if needed (for previously uploaded files)
-//     const cleanFileKey = file_key.replace(/function toString\(\) \{ \[native code\] \}/, "");
-
-//     const s3Client = new S3Client({
-//         region: "us-east-1",
-//         credentials: {
-//             accessKeyId: process.env.NEXT_PUBLIC_S3_ACCESS_KEY_ID!,
-//             secretAccessKey: process.env.NEXT_PUBLIC_S3_SECRET_ACCESS_KEY!,
-//         },
-//     });
-
-//     const command = new GetObjectCommand({
-//         Bucket: process.env.NEXT_PUBLIC_S3_BUCKET_NAME!,
-//         Key: cleanFileKey,
-//     });
-
-//     const signedUrl = await getSignedUrl(s3Client, command, { expiresIn: 3600 }); // expiresIn is in seconds (here: 1 hour)
-
-//     return signedUrl;
-// }
-
-function stripHostIfPresent(key: string) {
-  // If caller passed full https://bucket.s3… URL, keep only the path
-  const match = key.match(/^https?:\/\/[^/]+\/(.+)$/);
-  return match ? match[1] : key;
+  });
 }
 
-// console.log(
-//     await getSignedViewUrl('uploads/Academic-Calendar Even 2024-25 BE ME.pdf')
-// );
+export async function getPresignedUploadUrl(fileName: string, fileType: string) {
+  console.log("[S3] ========== GET PRESIGNED UPLOAD URL ==========");
+  console.log("[S3] Input:");
+  console.log("[S3] - fileName:", fileName);
+  console.log("[S3] - fileType:", fileType);
+  console.log("[S3] - BUCKET_NAME:", BUCKET_NAME);
+  console.log("[S3] - REGION:", REGION);
 
+  const file_key = `uploads/${Date.now()}-${fileName}`;
+  console.log("[S3] Generated file_key:", file_key);
 
-/** 1️⃣  60-minute view URL for an existing object */
-export async function getSignedViewUrl(
-  key: string,
-  expiresInSeconds = 60 * 60
-) {
-  if (!key) return '';
+  const s3Client = createS3Client();
 
-  const cleanKey = stripHostIfPresent(key);
+  console.log("[S3] Creating PutObjectCommand...");
+  const command = new PutObjectCommand({
+    Bucket: BUCKET_NAME,
+    Key: file_key,
+    ContentType: fileType,
+  });
 
-  const url = await getSignedUrl(
-    s3,
-    new GetObjectCommand({ Bucket: S3_BUCKET, Key: cleanKey }),
-    { expiresIn: expiresInSeconds },
-  );
+  console.log("[S3] Generating signed URL with getSignedUrl...");
+  const uploadUrl = await getSignedUrl(s3Client, command, { expiresIn: 3600 });
+
+  console.log("[S3] Signed URL generated:");
+  console.log("[S3] - URL length:", uploadUrl.length);
+  console.log("[S3] - URL starts with:", uploadUrl.substring(0, 60) + "...");
+
+  console.log("[S3] ========== SUCCESS ==========");
+  return { uploadUrl, file_key };
+}
+
+export async function getPresignedViewUrl(fileKey: string) {
+  console.log("[S3] ========== GET PRESIGNED VIEW URL ==========");
+  console.log("[S3] fileKey:", fileKey);
+
+  const s3Client = createS3Client();
+
+  const command = new GetObjectCommand({
+    Bucket: BUCKET_NAME,
+    Key: fileKey,
+  });
+
+  const url = await getSignedUrl(s3Client, command, { expiresIn: 3600 });
+  console.log("[S3] View URL generated, length:", url.length);
 
   return url;
 }
 
-
-export async function getPresignedUploadUrl(fileName: string, fileType: string) {
-    try {
-        const file_key = `uploads/${Date.now()}-${fileName.replace(/\s+/g, '-')}`;
-
-        const command = new PutObjectCommand({
-            Bucket: S3_BUCKET,
-            Key: file_key,
-            ContentType: fileType,
-        });
-
-        // This creates a secure, temporary URL (expires in 60s)
-        const uploadUrl = await getSignedUrl(s3, command, { expiresIn: 60 });
-
-        return { uploadUrl, file_key };
-    } catch (error) {
-        console.error("Error generating URL:", error);
-        throw new Error("Failed to generate upload URL");
-    }
+export function getS3PublicUrl(fileKey: string) {
+  const url = `https://${BUCKET_NAME}.s3.amazonaws.com/${fileKey}`;
+  console.log("[S3] Public URL:", url);
+  return url;
 }
-
-export async function getS3Url(file_key: string) {
-
-    
-    if (!file_key) {
-        console.error("Empty fileKey provided to getS3Url");
-        return "";
-    }
-      
-    // Clean up the file key to remove any function toString representations
-    const cleanFileKey = file_key.replace(/function toString\(\) \{ \[native code\] \}/, "");
-      
-    console.log("Building S3 URL with:", {
-      bucket: process.env.NEXT_PUBLIC_S3_BUCKET_NAME,
-      key: cleanFileKey
-    });
-      
-    return `https://${S3_BUCKET}.s3.amazonaws.com/${cleanFileKey}`;
-}
-
-
-// if (require.main === module) {
-//   (async () => {
-//     const key = 'uploads/Academic-Calendar Even 2024-25 BE ME.pdf';
-//     console.log('SIGNED →', await getSignedViewUrl(key));
-//   })();
-// }

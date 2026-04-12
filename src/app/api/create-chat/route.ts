@@ -1,89 +1,65 @@
-import { loadS3IntoPinecone } from "@/lib/db/pinecone";
 import { NextResponse, NextRequest } from "next/server";
-import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
-import { db } from '@/lib/db'
-import { chats } from '@/lib/db/schema'
-import { getS3Url } from "@/lib/db/s3";
-import { getAuth } from "@clerk/nextjs/server"
+import { db } from "@/lib/db";
+import { chats } from "@/lib/db/schema";
+import { getAuth } from "@clerk/nextjs/server";
+import { getS3PublicUrl } from "@/lib/db/s3";
+import { loadS3IntoPinecone } from "@/lib/db/pinecone";
 import { InferInsertModel } from "drizzle-orm";
-// import { number } from "cohere-ai/core/schemas";
-import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import 'dotenv/config'
 
-const s3Client = new S3Client({ 
-    region: process.env.S3_REGION!,
-    credentials: {
-        accessKeyId: process.env.S3_ACCESS_KEY_ID!,
-        secretAccessKey: process.env.S3_SECRET_ACCESS_KEY!
-    }
-});
+export const runtime = "nodejs";
 
 export async function POST(req: NextRequest) {
-    const { userId } = await getAuth(req);
-    if (!userId) {
-        return NextResponse.json({error: "Unauthorized"}, {status: 401});
+  console.log("[CREATE-CHAT] ==== STARTING CREATE CHAT REQUEST ====");
+
+  const { userId } = await getAuth(req);
+  console.log("[CREATE-CHAT] User authenticated:", !!userId);
+
+  if (!userId) {
+    console.log("[CREATE-CHAT] Unauthorized - no userId");
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  try {
+    console.log("[CREATE-CHAT] Parsing request body...");
+    const body = await req.json();
+    const { file_key, file_name } = body;
+    console.log("[CREATE-CHAT] file_key:", file_key);
+    console.log("[CREATE-CHAT] file_name:", file_name);
+
+    if (!file_key || typeof file_key !== 'string') {
+      console.log("[CREATE-CHAT] Invalid file_key:", typeof file_key);
+      return NextResponse.json({ error: "Invalid file key" }, { status: 400 });
     }
 
-    try {
-        const body = await req.json();
-        const { file_key, file_name } = body;
+    console.log("[CREATE-CHAT] Getting S3 public URL...");
+    const pdfUrl = getS3PublicUrl(file_key);
+    console.log("[CREATE-CHAT] PDF URL:", pdfUrl);
 
-        // Validate input parameters
-        if (!file_key || typeof file_key !== 'string') {
-            return NextResponse.json(
-                { error: "Invalid file key" },
-                { status: 400 }
-            );
-        }
+    console.log("[CREATE-CHAT] Loading document into Pinecone...");
+    await loadS3IntoPinecone(file_key);
+    console.log("[CREATE-CHAT] Pinecone loading complete");
 
-        console.log("File key received:", file_key); // Debug log
+    console.log("[CREATE-CHAT] Inserting chat into database...");
+    const newChat: InferInsertModel<typeof chats> = {
+      pdfName: file_name,
+      pdfUrl: pdfUrl,
+      userId: userId,
+      fileKey: file_key,
+    };
 
-        // Generate S3 URL
-        const pdfUrl = getS3Url(String(file_key));
+    const inserted = await db.insert(chats).values(newChat).returning();
+    const chat_id = inserted[0].id;
+    console.log("[CREATE-CHAT] Chat created successfully with id:", chat_id);
 
-        console.log("Generated PDF URL:", pdfUrl); // Debug log
+    console.log("[CREATE-CHAT] ==== SUCCESS ====");
+    return NextResponse.json({ chat_id }, { status: 200 });
 
-        if(!pdfUrl) {
-            return NextResponse.json(
-                { error: "Failed to generate PDF URL" },
-                { status: 500 }
-            );
-        }
-
-        // Process PDF
-        await loadS3IntoPinecone(file_key);
-
-        const command = new GetObjectCommand({
-            Bucket: process.env.S3_BUCKET_NAME!, 
-            Key: file_key, 
-        });
-
-        // Explicitly type the insert object using InferInsertModel
-        const newChat: InferInsertModel<typeof chats> = {
-            pdfName: file_name,
-            pdfUrl: await getSignedUrl(s3Client, command, { expiresIn: 3600 }),
-            userId: userId,
-            fileKey: file_key,            
-        };
-
-        // Database insertion
-        const [chat] = await db.insert(chats).values(newChat).returning({
-            insertedId: chats.id,
-        });
-
-        return NextResponse.json(
-            { chat_id: chat.insertedId },
-            { status: 200 }
-        );
-
-    } catch (error) {
-        console.error("Error in create-chat endpoint:", error);
-        return NextResponse.json(
-            { 
-              error: "Internal server error", 
-              details: error instanceof Error ? error.message : String(error) 
-            },
-            { status: 500 }
-        );
-    }
+  } catch (error) {
+    console.error("[CREATE-CHAT] ERROR:", error);
+    console.error("[CREATE-CHAT] Stack:", error instanceof Error ? error.stack : "No stack trace");
+    return NextResponse.json(
+      { error: "Internal server error", message: error instanceof Error ? error.message : "Unknown" },
+      { status: 500 }
+    );
+  }
 }
