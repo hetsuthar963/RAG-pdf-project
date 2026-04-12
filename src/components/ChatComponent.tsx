@@ -19,8 +19,8 @@ import { Loader } from "@/components/ui/loader";
 import { Button } from "@/components/ui/button";
 
 import {
-  Sidebar, SidebarContent, SidebarGroup, SidebarGroupLabel, SidebarHeader,
-  SidebarInset, SidebarMenu, SidebarMenuButton, SidebarProvider, SidebarTrigger,
+  Sidebar, SidebarContent, SidebarHeader,
+  SidebarProvider,
 } from "@/components/ui/sidebar";
 
 import { PromptInput, PromptInputTextarea, PromptInputActions, PromptInputAction } from "@/components/ui/prompt-input";
@@ -44,53 +44,61 @@ export type AppMessage = {
 
 function ChatSidebar({ chats, currentChatId }: { chats: DrizzleChat[]; currentChatId: number }) {
   return (
-    <Sidebar>
-      <SidebarHeader className="flex flex-row items-center justify-between gap-2 px-2 py-4">
-        <div className="flex flex-row items-center gap-2 px-2">
-          <div className="bg-primary/10 size-8 rounded-md" />
-          <div className="text-sm font-medium text-foreground">DocuChat</div>
+    <Sidebar style={{ width: '240px', flexShrink: 0 }} className="border-r">
+      <SidebarHeader className="px-3 py-3 border-b">
+        <div className="flex items-center gap-2">
+          <div className="bg-primary/10 size-7 rounded-md shrink-0" />
+          <span className="text-sm font-semibold text-foreground truncate">DocuChat</span>
         </div>
       </SidebarHeader>
 
-      <SidebarContent className="pt-2">
-        <div className="px-4">
+      <SidebarContent className="flex-1 overflow-y-auto py-2">
+        <div className="px-2">
           <Link href="/" className="block">
-            <Button variant="outline" className="mb-3 flex w-full items-center gap-2">
-              <PlusIcon size={16} />
-              <span>New Chat</span>
+            <Button variant="outline" className="w-full justify-start gap-2 text-xs h-8">
+              <PlusIcon size={14} />
+              <span className="truncate">New Chat</span>
             </Button>
           </Link>
         </div>
 
-        <SidebarGroup>
-          <SidebarGroupLabel>Documents</SidebarGroupLabel>
-          <SidebarMenu>
+        <div className="mt-3 px-2">
+          <div className="text-xs font-medium text-muted-foreground px-2 mb-2">Documents</div>
+          <div className="space-y-1">
             {chats.length === 0 ? (
-              <div className="px-4 py-4 text-sm text-muted-foreground">No documents</div>
+              <div className="px-2 py-2 text-xs text-muted-foreground">No documents</div>
             ) : (
               chats.map((chat) => (
-                <SidebarMenuButton key={chat.id} isActive={chat.id === currentChatId} asChild>
-                  <Link href={`/chat/${chat.id}`}>
-                    <span>{chat.pdfName}</span>
-                  </Link>
-                </SidebarMenuButton>
+                <Link 
+                  key={chat.id} 
+                  href={`/chat/${chat.id}`}
+                  className={cn(
+                    "flex items-center gap-2 px-2 py-1.5 rounded-md text-xs transition-colors",
+                    chat.id === currentChatId 
+                      ? "bg-primary/10 text-primary font-medium" 
+                      : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                  )}
+                >
+                  <FileText size={12} className="shrink-0" />
+                  <span className="truncate">{chat.pdfName}</span>
+                </Link>
               ))
             )}
-          </SidebarMenu>
-        </SidebarGroup>
+          </div>
+        </div>
       </SidebarContent>
 
-      <div className="mt-auto border-t p-4">
-        <div className="flex flex-col gap-2">
+      <div className="border-t p-2 shrink-0">
+        <div className="flex flex-col gap-1">
           <Link href="/" className="block">
-            <Button variant="ghost" className="w-full justify-start gap-2">
-              <Home size={16} />
+            <Button variant="ghost" className="w-full justify-start gap-2 text-xs h-8">
+              <Home size={14} />
               <span>Home</span>
             </Button>
           </Link>
           <Link href="/sign-out" className="block">
-            <Button variant="ghost" className="w-full justify-start gap-2">
-              <LogOut size={16} />
+            <Button variant="ghost" className="w-full justify-start gap-2 text-xs h-8">
+              <LogOut size={14} />
               <span>Sign Out</span>
             </Button>
           </Link>
@@ -233,10 +241,9 @@ function ChatContent({ chatId, initialMessages = [] }: { chatId: number; initial
   };
 
   return (
-    <main className="flex h-screen flex-col overflow-hidden">
+    <main className="flex flex-col h-full min-h-0">
       {/* Header */}
-      <header className="bg-background z-10 flex h-14 w-full shrink-0 items-center gap-2 border-b px-4">
-        <SidebarTrigger className="-ml-1" />
+      <header className="flex h-14 w-full shrink-0 items-center gap-2 border-b bg-background px-4">
         <div className="flex items-center gap-2">
           <FileText size={18} className="text-primary" />
           <span className="text-sm font-medium text-foreground">Document Chat</span>
@@ -398,11 +405,11 @@ export default function ChatComponent({
   const numericChatId = typeof chatId === "string" ? parseInt(chatId, 10) : chatId;
 
   return (
-    <SidebarProvider>
+    <SidebarProvider className="h-screen overflow-hidden">
       <ChatSidebar chats={userChats} currentChatId={numericChatId} />
-      <SidebarInset>
+      <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
         <ChatContent chatId={numericChatId} initialMessages={initialMessages} />
-      </SidebarInset>
+      </div>
     </SidebarProvider>
   );
 }

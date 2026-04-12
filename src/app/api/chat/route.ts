@@ -13,15 +13,15 @@ console.log("[CHAT-API] ========== CHAT API MODULE INITIALIZED ==========");
 export async function POST(req: NextRequest) {
   console.log("[CHAT-API] ========== NEW CHAT REQUEST ==========");
 
-  // Validate DeepSeek API key
-  const deepseekKey = process.env.DEEPSEEK_API_KEY;
-  console.log("[CHAT-API] Raw DEEPSEEK_API_KEY:", deepseekKey);
-  console.log("[CHAT-API] Key prefix:", deepseekKey?.substring(0, 10));
+  // Validate DeepSeek API key - support both naming conventions
+  const deepseekKey = process.env.DEEPSEEK_API_KEY || process.env.OPENAI_API_KEY;
+  console.log("[CHAT-API] Raw API_KEY:", deepseekKey ? `${deepseekKey.substring(0, 8)}...` : "NOT SET");
+  console.log("[CHAT-API] Available env keys:", Object.keys(process.env).filter(k => k.includes("API") || k.includes("DEEPSEEK")).join(", "));
   
   if (!deepseekKey || deepseekKey.length < 10) {
-    console.error("[CHAT-API] DEEPSEEK_API_KEY is missing or too short");
+    console.error("[CHAT-API] API key is missing or too short");
     return NextResponse.json({ 
-      error: "DeepSeek API key is not configured properly." 
+      error: "DeepSeek API key is not configured properly. Please add DEEPSEEK_API_KEY to Vercel project settings." 
     }, { status: 500 });
   }
 
@@ -133,7 +133,7 @@ RULES:
       }))
     ];
 
-    // Use OpenAI SDK for streaming
+    // Use OpenAI SDK for streaming (DeepSeek uses OpenAI-compatible API)
     const stream = await openai.chat.completions.create({
       model: "deepseek-chat",
       messages: openaiMessages,

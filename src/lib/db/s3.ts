@@ -3,28 +3,31 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 console.log("[S3] ========== S3 MODULE INITIALIZED ==========");
 
-const BUCKET_NAME = process.env.NEXT_PUBLIC_S3_BUCKET_NAME || "mydeproject01";
+// Support both local (S3_*) and Vercel (NEXT_PUBLIC_S3_*) env var naming
+const BUCKET_NAME = process.env.NEXT_PUBLIC_S3_BUCKET_NAME || process.env.S3_BUCKET_NAME || "mydeproject01";
 const REGION = process.env.S3_REGION || "us-east-1";
+
+// Check both env var naming conventions
+const S3_ACCESS_KEY_ID = process.env.S3_ACCESS_KEY_ID || process.env.NEXT_PUBLIC_S3_ACCESS_KEY_ID;
+const S3_SECRET_ACCESS_KEY = process.env.S3_SECRET_ACCESS_KEY || process.env.NEXT_PUBLIC_S3_SECRET_ACCESS_KEY;
 
 console.log("[S3] Configuration:");
 console.log("[S3] - BUCKET_NAME:", BUCKET_NAME);
 console.log("[S3] - REGION:", REGION);
-console.log("[S3] - S3_ACCESS_KEY_ID set:", !!process.env.S3_ACCESS_KEY_ID);
-console.log("[S3] - S3_SECRET_ACCESS_KEY set:", !!process.env.S3_SECRET_ACCESS_KEY);
+console.log("[S3] - S3_ACCESS_KEY_ID set:", !!S3_ACCESS_KEY_ID);
+console.log("[S3] - S3_SECRET_ACCESS_KEY set:", !!S3_SECRET_ACCESS_KEY);
 
 function createS3Client(): S3Client {
-  const accessKeyId = process.env.S3_ACCESS_KEY_ID;
-  const secretAccessKey = process.env.S3_SECRET_ACCESS_KEY;
+  const accessKeyId = S3_ACCESS_KEY_ID;
+  const secretAccessKey = S3_SECRET_ACCESS_KEY;
 
-  console.log("[S3] ENV CHECK - S3_ACCESS_KEY_ID:", process.env.S3_ACCESS_KEY_ID ? "SET" : "NOT SET");
-  console.log("[S3] ENV CHECK - S3_SECRET_ACCESS_KEY:", process.env.S3_SECRET_ACCESS_KEY ? "SET" : "NOT SET");
-  console.log("[S3] ENV CHECK - ALL ENV:", Object.keys(process.env).filter(k => k.includes("S3")).join(", "));
+  console.log("[S3] ENV CHECK - accessKeyId:", accessKeyId ? `SET (${accessKeyId.substring(0, 4)}...)` : "NOT SET");
+  console.log("[S3] ENV CHECK - secretAccessKey:", secretAccessKey ? "SET" : "NOT SET");
 
   if (!accessKeyId || !secretAccessKey) {
     console.error("[S3] CRITICAL: AWS credentials not configured!");
-    console.error("[S3] - accessKeyId:", accessKeyId ? "SET" : "MISSING");
-    console.error("[S3] - secretAccessKey:", secretAccessKey ? "SET" : "MISSING");
-    throw new Error("AWS credentials not configured. Please set S3_ACCESS_KEY_ID and S3_SECRET_ACCESS_KEY environment variables.");
+    console.error("[S3] Available S3 env vars:", Object.keys(process.env).filter(k => k.includes("S3")).join(", "));
+    throw new Error("AWS credentials not configured. Please set S3_ACCESS_KEY_ID and S3_SECRET_ACCESS_KEY environment variables in Vercel project settings.");
   }
 
   console.log("[S3] Creating S3 client with credentials:", accessKeyId.substring(0, 4) + "***");
