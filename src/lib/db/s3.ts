@@ -16,6 +16,10 @@ function createS3Client(): S3Client {
   const accessKeyId = process.env.S3_ACCESS_KEY_ID;
   const secretAccessKey = process.env.S3_SECRET_ACCESS_KEY;
 
+  console.log("[S3] ENV CHECK - S3_ACCESS_KEY_ID:", process.env.S3_ACCESS_KEY_ID ? "SET" : "NOT SET");
+  console.log("[S3] ENV CHECK - S3_SECRET_ACCESS_KEY:", process.env.S3_SECRET_ACCESS_KEY ? "SET" : "NOT SET");
+  console.log("[S3] ENV CHECK - ALL ENV:", Object.keys(process.env).filter(k => k.includes("S3")).join(", "));
+
   if (!accessKeyId || !secretAccessKey) {
     console.error("[S3] CRITICAL: AWS credentials not configured!");
     console.error("[S3] - accessKeyId:", accessKeyId ? "SET" : "MISSING");

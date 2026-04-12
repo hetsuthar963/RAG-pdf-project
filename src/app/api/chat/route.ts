@@ -1,28 +1,35 @@
 import { db } from "@/lib/db";
 import { chats, message as _message } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
-import { ChatOpenAI } from "@langchain/openai";
+import OpenAI from "openai";
 import { NextResponse, NextRequest } from "next/server";
 import { getContext } from "@/lib/context";
 import { getAuth } from "@clerk/nextjs/server";
-import { AIMessage, HumanMessage, SystemMessage } from "@langchain/core/messages";
 
 export const runtime = "nodejs";
 
 console.log("[CHAT-API] ========== CHAT API MODULE INITIALIZED ==========");
 
-const model = new ChatOpenAI({
-  modelName: "deepseek-chat",
-  openAIApiKey: process.env.DEEPSEEK_API_KEY,
-  configuration: {
-    baseURL: "https://api.deepseek.com/v1",
-  },
-  temperature: 0.7,
-  streaming: true,
-});
-
 export async function POST(req: NextRequest) {
   console.log("[CHAT-API] ========== NEW CHAT REQUEST ==========");
+
+  // Validate DeepSeek API key
+  const deepseekKey = process.env.DEEPSEEK_API_KEY;
+  console.log("[CHAT-API] Raw DEEPSEEK_API_KEY:", deepseekKey);
+  console.log("[CHAT-API] Key prefix:", deepseekKey?.substring(0, 10));
+  
+  if (!deepseekKey || deepseekKey.length < 10) {
+    console.error("[CHAT-API] DEEPSEEK_API_KEY is missing or too short");
+    return NextResponse.json({ 
+      error: "DeepSeek API key is not configured properly." 
+    }, { status: 500 });
+  }
+
+  // Create OpenAI client with DeepSeek
+  const openai = new OpenAI({
+    apiKey: deepseekKey,
+    baseURL: "https://api.deepseek.com",
+  });
 
   const { userId } = await getAuth(req);
   console.log("[CHAT-API] User authenticated:", !!userId);
@@ -107,23 +114,33 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    console.log("[CHAT-API] Generating LLM response...");
-    const langchainMessages = [
-      new SystemMessage(`
-        You are a precision-oriented AI assistant. 
-        RULES:
-        1. ONLY answer using the provided context: ${context}
-        2. If asked for a calendar or list of dates, ALWAYS use a Markdown Table.
-        3. For holidays or special dates, wrap the date in bold and brackets like this: **[Date]**. 
-        4. If the information is not in the context, state that you don't know.
-        5. Format code using triple backticks.
-      `),
-      ...messages.slice(-6).map((m: { role: string; content: string }) =>
-        m.role === "user" ? new HumanMessage(m.content) : new AIMessage(m.content)
-      ),
+    console.log("[CHAT-API] Generating LLM response with OpenAI SDK...");
+
+    // Build messages for OpenAI
+    const systemPrompt = `You are a precision-oriented AI assistant. 
+RULES:
+1. ONLY answer using the provided context: ${context}
+2. If asked for a calendar or list of dates, ALWAYS use a Markdown Table.
+3. For holidays or special dates, wrap the date in bold and brackets like this: **[Date]**. 
+4. If the information is not in the context, state that you don't know.
+5. Format code using triple backticks.`;
+
+    const openaiMessages = [
+      { role: "system", content: systemPrompt },
+      ...messages.slice(-6).map((m: { role: string; content: string }) => ({
+        role: m.role === "user" ? "user" : "assistant",
+        content: m.content
+      }))
     ];
 
-    const stream = await model.stream(langchainMessages);
+    // Use OpenAI SDK for streaming
+    const stream = await openai.chat.completions.create({
+      model: "deepseek-chat",
+      messages: openaiMessages,
+      temperature: 0.7,
+      stream: true,
+    });
+
     const encoder = new TextEncoder();
 
     const readable = new ReadableStream({
@@ -132,7 +149,7 @@ export async function POST(req: NextRequest) {
         try {
           console.log("[CHAT-API] Streaming response...");
           for await (const chunk of stream) {
-            const content = chunk.content as string;
+            const content = chunk.choices[0]?.delta?.content;
             if (content) {
               fullText += content;
               controller.enqueue(encoder.encode(content));
@@ -148,22 +165,20 @@ export async function POST(req: NextRequest) {
         } finally {
           controller.close();
         }
-      },
+      }
     });
 
-    console.log("[CHAT-API] ========== SUCCESS ==========");
     return new Response(readable, {
-      headers: {
-        "Content-Type": "text/plain; charset=utf-8",
-        "X-Rag-Data": JSON.stringify(ragData),
-      },
+      headers: { 
+        'Content-Type': 'text/plain; charset=utf-8', 
+        'X-Rag-Data': JSON.stringify(ragData) 
+      }
     });
 
   } catch (error) {
     console.error("[CHAT-API] ERROR:", error);
-    console.error("[CHAT-API] Stack:", error instanceof Error ? error.stack : "No stack trace");
     return NextResponse.json(
-      { error: "Internal Server Error", message: error instanceof Error ? error.message : "Unknown" },
+      { error: error instanceof Error ? error.message : "Internal server error" },
       { status: 500 }
     );
   }

@@ -368,6 +368,7 @@ function ChatContent({ chatId, initialMessages = [] }: { chatId: number; initial
                     size="icon"
                     disabled={!prompt.trim() && !isLoading}
                     className="size-9 rounded-full"
+                    onClick={isLoading ? stopGeneration : handleSubmit}
                   >
                     {isLoading ? (
                       <Square size={16} fill="currentColor" />
